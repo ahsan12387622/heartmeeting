@@ -115,27 +115,115 @@
             background: rgba(244, 63, 94, 0.5);
             border-radius: 9999px;
         }
+
+        /* ===== CHAT: typing dots ===== */
+        .tdot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 9999px;
+            background: #cbd5e1;
+            animation: tdotBounce 1.2s infinite ease-in-out;
+        }
+        .tdot:nth-child(2) { animation-delay: 0.15s; }
+        .tdot:nth-child(3) { animation-delay: 0.3s; }
+        @keyframes tdotBounce {
+            0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+            30% { transform: translateY(-5px); opacity: 1; }
+        }
+
+        /* ===== CHAT: ticks ===== */
+        .tick-svg {
+            display: inline-block;
+            vertical-align: middle;
+        }
+
+        /* ===== CHAT: voice recording UI ===== */
+        #micBtn {
+            touch-action: none;
+            -webkit-user-select: none;
+            user-select: none;
+            -webkit-touch-callout: none;
+            transition: transform 0.2s ease, background 0.2s ease;
+        }
+        #micBtn.mic-recording {
+            transform: scale(1.35);
+            background: linear-gradient(to right, #e11d48, #db2777);
+            color: #fff;
+            box-shadow: 0 0 25px rgba(244, 63, 94, 0.7);
+        }
+        .rec-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 9999px;
+            background: #ef4444;
+            animation: recBlink 1s infinite;
+        }
+        @keyframes recBlink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.2; }
+        }
+        .rec-bar {
+            flex: none;
+            width: 3px;
+            height: 4px;
+            border-radius: 2px;
+            background: #fb7185;
+            transition: height 0.08s linear;
+        }
+        #lockHint {
+            animation: lockFloat 1.2s infinite ease-in-out;
+        }
+        @keyframes lockFloat {
+            0%, 100% { transform: translateY(0); }
+            50% { transform: translateY(-6px); }
+        }
+
+        /* ===== CHAT: voice message bubble ===== */
+        .vbar {
+            display: block;
+            flex: none;
+            width: 3px;
+            border-radius: 2px;
+            background: currentColor;
+            opacity: 0.4;
+        }
+        .vbar.on { opacity: 1; }
+        .vplay {
+            flex: none;
+            width: 38px;
+            height: 38px;
+            border-radius: 9999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.18);
+            color: inherit;
+        }
     </style>
 
     <!-- Firebase Modular SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getDatabase, ref, push, onChildAdded, onValue, set, update, remove, get, onDisconnect, serverTimestamp } 
+        import { getDatabase, ref, push, onChildAdded, onChildChanged, onValue, set, update, remove, get, onDisconnect, serverTimestamp } 
             from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
         window.HSApp = {
             db: null,
             user: null,
-            room: null,
+            roomId: null,
+            joinedPartnerUid: null,
             partner: null,
             activeTab: 'dashboard',
             soundEnabled: true,
             audioCtx: null,
             recordingVoice: false,
-            mediaRecorder: null,
-            audioChunks: [],
-            unreadChatCount: 0
+            unreadChatCount: 0,
+            partnerOnline: false,
+            partnerActivity: null,      // 'typing' | 'recording' | null
+            pendingSeen: new Set(),     // incoming message keys not yet marked seen
+            lampState: false
         };
 
         const firebaseConfig = {
@@ -152,6 +240,9 @@
         const auth = getAuth(app);
         const db = getDatabase(app);
         window.HSApp.db = db;
+
+        // Firebase helpers shared with the normal (non-module) script
+        window.FB = { ref, push, update, set, remove, get, onValue, onDisconnect, serverTimestamp };
 
         // Audio Synthesizer
         function playAudio(type = 'ping') {
@@ -279,87 +370,168 @@
                 if (data.pairedRoomId && data.partnerUid) {
                     joinRoom(data.pairedRoomId, data.partnerUid);
                 } else {
-                    window.HSApp.room = null;
-                    window.HSApp.partner = null;
+                    if (window.HSApp.roomId) leaveRoom();
                     renderUnpairedState();
                 }
+            });
+
+            // Seen ticks: tab wapis visible ho to pending messages seen mark karo
+            document.addEventListener('visibilitychange', () => {
+                if (document.visibilityState === 'visible') window.markChatSeen();
             });
         }
         window.initRealtimeListeners = initRealtimeListeners;
 
+        // ---- Room listeners management (duplicate listeners se bachne ke liye) ----
+        let roomUnsubs = [];
+
+        function leaveRoom() {
+            roomUnsubs.forEach(fn => { try { fn(); } catch (e) {} });
+            roomUnsubs = [];
+
+            const A = window.HSApp;
+            if (A.roomId && A.user) {
+                try { remove(ref(db, `rooms/${A.roomId}/presence/${A.user.uid}`)); } catch (e) {}
+            }
+            A.roomId = null;
+            A.joinedPartnerUid = null;
+            A.partner = null;
+            A.partnerActivity = null;
+            A.partnerOnline = false;
+            A.pendingSeen = new Set();
+
+            if (window.resetChatFeed) window.resetChatFeed();
+            if (window.refreshChatSubtitle) window.refreshChatSubtitle();
+        }
+
+        function isChatVisible() {
+            return window.HSApp.activeTab === 'chat' && document.visibilityState === 'visible';
+        }
+
+        // Pending incoming messages ko "seen" (blue tick) mark karna
+        let seenFlushTimer = null;
+        window.markChatSeen = function () {
+            const A = window.HSApp;
+            if (!A.roomId || A.pendingSeen.size === 0) return;
+            if (!isChatVisible()) return;
+
+            const updates = {};
+            A.pendingSeen.forEach(k => { updates[`${k}/status`] = 'seen'; });
+            A.pendingSeen = new Set();
+            update(ref(db, `rooms/${A.roomId}/chat`), updates).catch(() => {});
+        };
+
+        function scheduleSeenFlush() {
+            clearTimeout(seenFlushTimer);
+            seenFlushTimer = setTimeout(() => window.markChatSeen(), 200);
+        }
+
         // Join Shared Room
         function joinRoom(roomId, partnerUid) {
-            window.HSApp.roomId = roomId;
+            const A = window.HSApp;
+            if (A.roomId === roomId && A.joinedPartnerUid === partnerUid) return; // already joined
+            if (A.roomId) leaveRoom();
 
-            // Fetch Partner Profile & Presence
-            const partnerRef = ref(db, `users/${partnerUid}`);
-            onValue(partnerRef, (snapshot) => {
+            A.roomId = roomId;
+            A.joinedPartnerUid = partnerUid;
+            const myUid = A.user.uid;
+
+            if (window.resetChatFeed) window.resetChatFeed();
+
+            // Fetch Partner Profile
+            roomUnsubs.push(onValue(ref(db, `users/${partnerUid}`), (snapshot) => {
                 const pData = snapshot.val();
                 if (pData) {
                     window.HSApp.partner = pData;
                     renderPairedState();
                 }
-            });
+            }));
 
-            // Partner Presence Listener
-            const partnerStatusRef = ref(db, `status/${partnerUid}`);
-            onValue(partnerStatusRef, (snap) => {
-                const st = snap.val();
-                updatePartnerOnlineBadge(st);
-            });
+            // Partner Online / Offline Presence
+            roomUnsubs.push(onValue(ref(db, `status/${partnerUid}`), (snap) => {
+                updatePartnerOnlineBadge(snap.val());
+            }));
+
+            // Partner "typing..." / "recording voice..." activity
+            const myActivityRef = ref(db, `rooms/${roomId}/presence/${myUid}`);
+            onDisconnect(myActivityRef).remove();
+            roomUnsubs.push(onValue(ref(db, `rooms/${roomId}/presence/${partnerUid}`), (snap) => {
+                const v = snap.val();
+                window.HSApp.partnerActivity = v ? v.state : null;
+                window.refreshChatSubtitle();
+            }));
 
             // Listen for Signal Actions (Hugs, Kisses, Heartbeats)
             const pingsRef = ref(db, `rooms/${roomId}/pings`);
             let isInitialPing = true;
-            onChildAdded(pingsRef, (snapshot) => {
+            roomUnsubs.push(onChildAdded(pingsRef, (snapshot) => {
                 const data = snapshot.val();
                 if (!data) return;
 
                 if (!isInitialPing && data.senderId !== window.HSApp.user.uid) {
                     onPartnerSignalReceived(data);
                 }
-            });
+            }));
             setTimeout(() => { isInitialPing = false; }, 1200);
 
             // Listen for Realtime Chat Messages
             const chatRef = ref(db, `rooms/${roomId}/chat`);
-            document.getElementById('chatMessagesFeed').innerHTML = '';
             let isInitialChat = true;
 
-            onChildAdded(chatRef, (snapshot) => {
+            roomUnsubs.push(onChildAdded(chatRef, (snapshot) => {
                 const msg = snapshot.val();
-                if (msg) {
-                    renderChatMessage(msg, snapshot.key);
+                if (!msg) return;
+                const key = snapshot.key;
+
+                renderChatMessage(msg, key);
+
+                if (msg.senderId !== window.HSApp.user.uid) {
+                    // Incoming message: delivered / seen ticks handle karo
+                    if (msg.status !== 'seen') {
+                        window.HSApp.pendingSeen.add(key);
+                        if (isChatVisible()) {
+                            scheduleSeenFlush();
+                        } else if (msg.status !== 'delivered') {
+                            update(ref(db, `rooms/${roomId}/chat/${key}`), { status: 'delivered' }).catch(() => {});
+                        }
+                    }
 
                     // Unread Message Badge Handler
-                    if (!isInitialChat && msg.senderId !== window.HSApp.user.uid && window.HSApp.activeTab !== 'chat') {
+                    if (!isInitialChat && window.HSApp.activeTab !== 'chat') {
                         window.HSApp.unreadChatCount++;
                         updateChatBadgeUI();
                         playAudio('ping');
                     }
                 }
-            });
+            }));
+
+            // Status change (sent -> delivered -> seen) apni bheji hui messages par
+            roomUnsubs.push(onChildChanged(chatRef, (snapshot) => {
+                const msg = snapshot.val();
+                if (msg && msg.senderId === window.HSApp.user.uid) {
+                    updateMessageStatus(snapshot.key, msg.status);
+                }
+            }));
             setTimeout(() => { isInitialChat = false; }, 1200);
 
             // Room State (Lamp, Mood)
-            const stateRef = ref(db, `rooms/${roomId}/state`);
-            onValue(stateRef, (snapshot) => {
+            roomUnsubs.push(onValue(ref(db, `rooms/${roomId}/state`), (snapshot) => {
                 const st = snapshot.val();
                 if (!st) return;
 
                 if (st.lampOn !== undefined) {
+                    window.HSApp.lampState = !!st.lampOn;
                     updateLampUI(st.lampOn, st.lampBy);
                 }
                 if (st.partnerMood && window.HSApp.partner && st.partnerMood[window.HSApp.partner.uid]) {
                     document.getElementById('partnerMoodText').innerText = st.partnerMood[window.HSApp.partner.uid];
                 }
-            });
+            }));
 
             // Shared Notes
-            const notesRef = ref(db, `rooms/${roomId}/notes`);
-            onValue(notesRef, (snapshot) => {
+            roomUnsubs.push(onValue(ref(db, `rooms/${roomId}/notes`), (snapshot) => {
                 renderSecretNotes(snapshot.val());
-            });
+            }));
         }
 
         // Action Signal Handler (Animation + Overlay + Sound)
@@ -389,6 +561,10 @@
         function updatePartnerOnlineBadge(statusObj) {
             const textEl = document.getElementById('partnerOnlineStatus');
             const dotEl = document.getElementById('partnerOnlineDot');
+
+            window.HSApp.partnerOnline = !!(statusObj && statusObj.state === 'online');
+            if (window.refreshChatSubtitle) window.refreshChatSubtitle();
+
             if (!textEl || !dotEl) return;
 
             if (statusObj && statusObj.state === 'online') {
@@ -564,7 +740,7 @@
                         onclick="handleHeartClick(event)"
                         onmousedown="startHeartbeatHold()" 
                         onmouseup="stopHeartbeatHold()"
-                        mouseleave="stopHeartbeatHold()"
+                        onmouseleave="stopHeartbeatHold()"
                         ontouchstart="startHeartbeatHold()"
                         ontouchend="stopHeartbeatHold()"
                         class="relative w-48 h-48 md:w-60 md:h-60 rounded-full glass-panel border-2 border-rose-400/40 flex flex-col items-center justify-center space-y-2 shadow-2xl transition-all duration-300 active:scale-95 group-hover:border-rose-400 cursor-pointer overflow-hidden">
@@ -699,7 +875,7 @@
                         <img id="chatPartnerDp" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100" class="w-10 h-10 rounded-full object-cover border-2 border-rose-500">
                         <div>
                             <h3 id="chatPartnerName" class="font-bold text-sm text-white">Partner Name</h3>
-                            <p class="text-[10px] text-emerald-400 font-semibold">End-to-End Room Encrypted</p>
+                            <p id="chatPartnerSub" class="text-[10px] text-slate-400 font-semibold">Offline</p>
                         </div>
                     </div>
                 </div>
@@ -712,26 +888,68 @@
                     </div>
                 </div>
 
+                <!-- Partner "typing..." / "recording voice..." indicator -->
+                <div id="typingBar" class="hidden px-6 pb-2 pt-1">
+                    <div class="inline-flex items-center gap-2 glass-panel border border-white/10 rounded-2xl px-3.5 py-2">
+                        <span id="typingDots" class="inline-flex items-center gap-1">
+                            <span class="tdot"></span><span class="tdot"></span><span class="tdot"></span>
+                        </span>
+                        <span id="typingRec" class="hidden items-center gap-1.5">
+                            <span class="rec-dot" style="width:8px;height:8px;"></span>
+                            <span class="text-sm leading-none">🎙️</span>
+                        </span>
+                        <span id="typingText" class="text-[11px] text-slate-300 font-medium">typing...</span>
+                    </div>
+                </div>
+
                 <!-- Chat Input Controls -->
-                <div class="p-4 bg-white/5 border-t border-white/10 flex items-center space-x-2">
-                    <!-- Attachment button -->
-                    <label class="p-2.5 rounded-xl glass-panel text-slate-300 hover:text-rose-400 cursor-pointer transition-colors">
-                        <i data-lucide="paperclip" class="w-5 h-5"></i>
-                        <input type="file" id="chatFileInput" class="hidden" onchange="handleFileUpload(event)">
-                    </label>
+                <div id="chatInputBar" class="relative p-4 bg-white/5 border-t border-white/10">
 
-                    <!-- Voice Note Recording Button -->
-                    <button id="voiceNoteBtn" onclick="toggleVoiceRecording()" class="p-2.5 rounded-xl glass-panel text-slate-300 hover:text-rose-400 transition-colors">
-                        <i data-lucide="mic" class="w-5 h-5"></i>
-                    </button>
+                    <!-- Normal input row -->
+                    <div class="flex items-center space-x-2">
+                        <!-- Attachment button -->
+                        <label class="p-2.5 rounded-xl glass-panel text-slate-300 hover:text-rose-400 cursor-pointer transition-colors">
+                            <i data-lucide="paperclip" class="w-5 h-5"></i>
+                            <input type="file" id="chatFileInput" class="hidden" onchange="handleFileUpload(event)">
+                        </label>
 
-                    <!-- Text Message Input -->
-                    <input type="text" id="chatInput" onkeypress="if(event.key==='Enter') sendChatMessage()" placeholder="Type a message or paste image link..." class="flex-1 px-4 py-3 rounded-2xl glass-input text-xs">
+                        <!-- Text Message Input -->
+                        <input type="text" id="chatInput" oninput="onChatInput()" onkeydown="if(event.key==='Enter') sendChatMessage()" placeholder="Type a message..." class="flex-1 px-4 py-3 rounded-2xl glass-input text-xs">
 
-                    <!-- Send Button -->
-                    <button onclick="sendChatMessage()" class="p-3 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-lg shadow-rose-600/30 transition-all">
-                        <i data-lucide="send" class="w-4 h-4"></i>
-                    </button>
+                        <!-- Send Button (text hone par dikhta hai) -->
+                        <button id="sendBtn" onclick="sendChatMessage()" class="hidden w-11 h-11 shrink-0 rounded-2xl bg-gradient-to-r from-rose-600 to-pink-600 hover:from-rose-500 hover:to-pink-500 text-white shadow-lg shadow-rose-600/30 transition-all items-center justify-center">
+                            <i data-lucide="send" class="w-4 h-4"></i>
+                        </button>
+
+                        <!-- Mic Button (text na ho to dikhta hai): hold = record, release = send, left slide = cancel, up slide = lock -->
+                        <button id="micBtn"
+                            onpointerdown="micPointerDown(event)"
+                            onpointermove="micPointerMove(event)"
+                            onpointerup="micPointerUp(event)"
+                            onpointercancel="micPointerUp(event, true)"
+                            oncontextmenu="return false"
+                            class="w-11 h-11 shrink-0 rounded-2xl glass-panel text-slate-300 hover:text-rose-400 flex items-center justify-center z-20">
+                            <span id="micIconWrap"><i data-lucide="mic" class="w-5 h-5"></i></span>
+                            <span id="micSendWrap" class="hidden"><i data-lucide="send" class="w-5 h-5"></i></span>
+                        </button>
+                    </div>
+
+                    <!-- Lock hint (hold karte waqt upar slide karne ke liye) -->
+                    <div id="lockHint" class="hidden absolute right-3 bottom-full mb-3 z-30 flex-col items-center gap-1 px-2.5 py-3 rounded-full bg-slate-900 border border-white/15 text-slate-300 shadow-xl">
+                        <i data-lucide="lock" class="w-4 h-4"></i>
+                        <i data-lucide="chevron-up" class="w-4 h-4"></i>
+                    </div>
+
+                    <!-- Recording bar (WhatsApp style) -->
+                    <div id="recordingBar" class="hidden absolute inset-y-0 left-0 right-[64px] z-10 items-center gap-3 px-4 bg-[#0d0716] border-t border-white/10">
+                        <button id="recTrashBtn" onclick="cancelRecording()" class="hidden w-9 h-9 shrink-0 rounded-full bg-white/10 hover:bg-red-500/30 text-red-300 items-center justify-center transition-colors">
+                            <i data-lucide="trash-2" class="w-4 h-4"></i>
+                        </button>
+                        <span class="rec-dot shrink-0"></span>
+                        <span id="recTimer" class="text-sm font-semibold text-white tabular-nums w-10 shrink-0">0:00</span>
+                        <div id="recWave" class="flex-1 flex items-center justify-center gap-[2px] h-8 overflow-hidden"></div>
+                        <span id="recHint" class="text-[11px] text-slate-300 whitespace-nowrap shrink-0">‹ Slide to cancel</span>
+                    </div>
                 </div>
             </div>
         </div>
@@ -1142,14 +1360,14 @@
                 card.className = 'glass-panel p-4 rounded-2xl flex items-center justify-between border border-rose-500/30';
                 card.innerHTML = `
                     <div class="flex items-center space-x-3">
-                        <img src="${req.fromDp}" class="w-10 h-10 rounded-full object-cover border border-rose-400">
+                        <img src="${escapeHtml(req.fromDp)}" class="w-10 h-10 rounded-full object-cover border border-rose-400">
                         <div>
                             <h5 class="font-bold text-xs text-white">${escapeHtml(req.fromName)}</h5>
-                            <span class="text-[10px] text-rose-300 font-mono">${req.fromCustomUid}</span>
+                            <span class="text-[10px] text-rose-300 font-mono">${escapeHtml(req.fromCustomUid)}</span>
                         </div>
                     </div>
                     <div class="flex items-center space-x-2">
-                        <button onclick="acceptFriendRequest('${key}', '${req.fromUid}')" class="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-all">
+                        <button onclick="acceptFriendRequest('${key}', '${escapeHtml(req.fromUid)}')" class="px-3 py-1.5 rounded-xl bg-emerald-500/20 text-emerald-300 hover:bg-emerald-500/30 text-xs font-bold transition-all">
                             Accept
                         </button>
                         <button onclick="declineFriendRequest('${key}')" class="px-3 py-1.5 rounded-xl bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 text-xs font-bold transition-all">
@@ -1258,24 +1476,151 @@
             });
         }
 
-        // 5. WhatsApp-Style Chat Engine
+        /* =====================================================================
+           5. WHATSAPP-STYLE CHAT ENGINE
+              - typing... / recording voice... indicator
+              - sent / delivered / seen ticks (single, double, blue)
+              - WhatsApp style voice recording (hold, slide to cancel, lock)
+           ===================================================================== */
+
+        const CHAT_INTRO_HTML = `
+            <div class="text-center py-6 text-xs text-slate-400">
+                <i data-lucide="lock" class="w-4 h-4 mx-auto mb-1 text-rose-400"></i>
+                Messages are private inside your shared room.
+            </div>`;
+
+        function resetChatFeed() {
+            const feed = document.getElementById('chatMessagesFeed');
+            if (!feed) return;
+            feed.innerHTML = CHAT_INTRO_HTML;
+            lucide.createIcons();
+        }
+
+        // ---------- helpers ----------
+        function fmtTime(sec) {
+            sec = Math.max(0, Math.floor(sec || 0));
+            const m = Math.floor(sec / 60);
+            const s = sec % 60;
+            return `${m}:${String(s).padStart(2, '0')}`;
+        }
+
+        function safeMediaUrl(u) {
+            u = String(u || '');
+            return /^(data:(image|video|audio)\/|https?:\/\/)/i.test(u) ? u : '';
+        }
+
+        // ---------- ticks ----------
+        function tickSvg(status) {
+            const common = 'class="tick-svg" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"';
+            if (status === 'seen') {
+                return `<svg ${common} stroke="#38bdf8"><path d="M2 12.5l4.5 4.5L16 7.5"/><path d="M9.5 15.5l1.5 1.5L22 7.5"/></svg>`;
+            }
+            if (status === 'delivered') {
+                return `<svg ${common} stroke="rgba(255,255,255,0.7)"><path d="M2 12.5l4.5 4.5L16 7.5"/><path d="M9.5 15.5l1.5 1.5L22 7.5"/></svg>`;
+            }
+            // sent
+            return `<svg ${common} stroke="rgba(255,255,255,0.7)"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>`;
+        }
+
+        function updateMessageStatus(key, status) {
+            const el = document.getElementById('tick-' + key);
+            if (el) el.innerHTML = tickSvg(status || 'sent');
+        }
+
+        // ---------- typing / recording activity ----------
+        let typingTimer = null;
+        let isTypingSent = false;
+
+        function setActivity(state) {
+            const A = window.HSApp;
+            if (!A.roomId || !A.user || !window.FB) return;
+            const r = window.FB.ref(A.db, `rooms/${A.roomId}/presence/${A.user.uid}`);
+            if (state) window.FB.set(r, { state: state, ts: Date.now() });
+            else window.FB.remove(r);
+        }
+
+        function stopTyping() {
+            clearTimeout(typingTimer);
+            if (isTypingSent) {
+                isTypingSent = false;
+                if (!window.HSApp.recordingVoice) setActivity(null);
+            }
+        }
+
+        function onChatInput() {
+            const input = document.getElementById('chatInput');
+            const has = input.value.trim().length > 0;
+
+            // text hai to Send button, warna Mic button
+            document.getElementById('sendBtn').classList.toggle('hidden', !has);
+            document.getElementById('sendBtn').classList.toggle('flex', has);
+            document.getElementById('micBtn').classList.toggle('hidden', has);
+
+            if (has) {
+                if (!isTypingSent) {
+                    isTypingSent = true;
+                    setActivity('typing');
+                }
+                clearTimeout(typingTimer);
+                typingTimer = setTimeout(stopTyping, 2000);
+            } else {
+                stopTyping();
+            }
+        }
+
+        function refreshChatSubtitle() {
+            const A = window.HSApp;
+            const sub = document.getElementById('chatPartnerSub');
+            const bar = document.getElementById('typingBar');
+            const txt = document.getElementById('typingText');
+            const dots = document.getElementById('typingDots');
+            const rec = document.getElementById('typingRec');
+            const feed = document.getElementById('chatMessagesFeed');
+            if (!sub || !bar) return;
+
+            const act = A.roomId ? A.partnerActivity : null;
+
+            if (act === 'typing' || act === 'recording') {
+                const isRec = act === 'recording';
+                sub.textContent = isRec ? 'recording voice...' : 'typing...';
+                sub.className = 'text-[10px] text-emerald-400 font-semibold';
+                txt.textContent = isRec ? 'recording voice...' : 'typing...';
+                dots.classList.toggle('hidden', isRec);
+                rec.classList.toggle('hidden', !isRec);
+                rec.classList.toggle('inline-flex', isRec);
+                bar.classList.remove('hidden');
+                if (feed) feed.scrollTop = feed.scrollHeight;
+            } else {
+                bar.classList.add('hidden');
+                if (A.partnerOnline) {
+                    sub.textContent = 'Online';
+                    sub.className = 'text-[10px] text-emerald-400 font-semibold';
+                } else {
+                    sub.textContent = 'Offline';
+                    sub.className = 'text-[10px] text-slate-400 font-semibold';
+                }
+            }
+        }
+
+        // ---------- sending text / files ----------
         function sendChatMessage() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
             if (!text || !window.HSApp.roomId) return;
 
-            import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, push }) => {
-                const chatRef = ref(window.HSApp.db, `rooms/${window.HSApp.roomId}/chat`);
-                push(chatRef, {
-                    senderId: window.HSApp.user.uid,
-                    senderName: window.HSApp.user.name,
-                    text: text,
-                    type: 'text',
-                    timestamp: Date.now()
-                });
+            const A = window.HSApp;
+            window.FB.push(window.FB.ref(A.db, `rooms/${A.roomId}/chat`), {
+                senderId: A.user.uid,
+                senderName: A.user.name,
+                text: text,
+                type: 'text',
+                status: 'sent',
+                timestamp: Date.now()
             });
 
             input.value = '';
+            stopTyping();
+            onChatInput();
         }
 
         function handleFileUpload(event) {
@@ -1283,22 +1628,38 @@
             if (!file || !window.HSApp.roomId) return;
 
             const reader = new FileReader();
-            reader.onload = function(e) {
+            reader.onload = function (e) {
                 const dataUrl = e.target.result;
                 const fileType = file.type.startsWith('image/') ? 'image' : (file.type.startsWith('video/') ? 'video' : 'file');
 
-                import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, push }) => {
-                    const chatRef = ref(window.HSApp.db, `rooms/${window.HSApp.roomId}/chat`);
-                    push(chatRef, {
-                        senderId: window.HSApp.user.uid,
-                        senderName: window.HSApp.user.name,
-                        mediaUrl: dataUrl,
-                        type: fileType,
-                        timestamp: Date.now()
-                    });
+                const A = window.HSApp;
+                window.FB.push(window.FB.ref(A.db, `rooms/${A.roomId}/chat`), {
+                    senderId: A.user.uid,
+                    senderName: A.user.name,
+                    mediaUrl: dataUrl,
+                    type: fileType,
+                    fileName: file.name || '',
+                    status: 'sent',
+                    timestamp: Date.now()
                 });
             };
             reader.readAsDataURL(file);
+            event.target.value = '';
+        }
+
+        // ---------- rendering a message ----------
+        const PLAY_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>';
+        const PAUSE_ICON = '<svg viewBox="0 0 24 24" width="18" height="18" fill="currentColor"><path d="M6 5h4v14H6zM14 5h4v14h-4z"/></svg>';
+
+        function fallbackWave(seedStr, n = 32) {
+            let seed = 0;
+            for (let i = 0; i < seedStr.length; i++) seed = (seed * 31 + seedStr.charCodeAt(i)) >>> 0;
+            const out = [];
+            for (let i = 0; i < n; i++) {
+                seed = (seed * 1664525 + 1013904223) >>> 0;
+                out.push(0.25 + (seed % 1000) / 1000 * 0.75);
+            }
+            return out;
         }
 
         function renderChatMessage(msg, key) {
@@ -1307,69 +1668,99 @@
             const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
             const item = document.createElement('div');
+            item.id = 'msg-' + key;
             item.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'} space-y-1`;
 
             let contentHtml = '';
             if (msg.type === 'text') {
-                contentHtml = `<p class="text-xs text-slate-100 font-light leading-relaxed">${escapeHtml(msg.text)}</p>`;
+                contentHtml = `<p class="text-xs text-slate-100 font-light leading-relaxed whitespace-pre-wrap break-words">${escapeHtml(msg.text)}</p>`;
             } else if (msg.type === 'image') {
-                contentHtml = `<img src="${msg.mediaUrl}" class="rounded-xl max-w-xs max-h-48 object-cover">`;
+                contentHtml = `<img data-media class="rounded-xl max-w-xs max-h-48 object-cover">`;
             } else if (msg.type === 'video') {
-                contentHtml = `<video src="${msg.mediaUrl}" controls class="rounded-xl max-w-xs max-h-48"></video>`;
+                contentHtml = `<video data-media controls class="rounded-xl max-w-xs max-h-48"></video>`;
             } else if (msg.type === 'voice') {
-                contentHtml = `<audio src="${msg.mediaUrl}" controls class="w-48"></audio>`;
+                const wave = (Array.isArray(msg.wave) && msg.wave.length) ? msg.wave : fallbackWave(String(key));
+                const bars = wave.map(v => `<span class="vbar" style="height:${Math.max(12, Math.round(Math.min(1, v) * 100))}%"></span>`).join('');
+                contentHtml = `
+                    <div class="voice-msg flex items-center gap-2.5 w-60">
+                        <button type="button" class="vplay">${PLAY_ICON}</button>
+                        <div class="flex-1 min-w-0">
+                            <div class="vwave flex items-center gap-[2px] h-8 cursor-pointer">${bars}</div>
+                            <span class="vtime text-[10px] opacity-70 tabular-nums">${fmtTime(msg.duration)}</span>
+                        </div>
+                        <audio data-media preload="metadata" class="hidden"></audio>
+                    </div>`;
+            } else {
+                contentHtml = `<p class="text-xs text-slate-300 italic">📎 ${escapeHtml(msg.fileName || 'Attachment')}</p>`;
             }
+
+            const tickHtml = isMe ? `<span id="tick-${key}" class="inline-flex items-center">${tickSvg(msg.status || 'sent')}</span>` : '';
 
             item.innerHTML = `
                 <div class="${isMe ? 'bg-gradient-to-r from-rose-600 to-pink-600 text-white' : 'glass-panel border border-white/10 text-slate-100'} p-3 rounded-2xl max-w-sm shadow-md">
                     <span class="text-[9px] font-bold block mb-1 opacity-70">${isMe ? 'You' : escapeHtml(msg.senderName)}</span>
                     ${contentHtml}
-                    <span class="text-[8px] opacity-60 text-right block mt-1">${timeStr}</span>
+                    <div class="flex items-center justify-end gap-1 mt-1">
+                        <span class="text-[8px] opacity-60">${timeStr}</span>
+                        ${tickHtml}
+                    </div>
                 </div>
             `;
+
+            // media src safely set (HTML string me inject nahi kiya)
+            const media = item.querySelector('[data-media]');
+            if (media) media.src = safeMediaUrl(msg.mediaUrl);
+
+            if (msg.type === 'voice') setupVoicePlayer(item, msg);
+
             feed.appendChild(item);
             feed.scrollTop = feed.scrollHeight;
         }
 
-        // Voice Note Recorder Engine
-        function toggleVoiceRecording() {
-            const btn = document.getElementById('voiceNoteBtn');
-            if (!window.HSApp.recordingVoice) {
-                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-                    navigator.mediaDevices.getUserMedia({ audio: true }).then(stream => {
-                        window.HSApp.mediaRecorder = new MediaRecorder(stream);
-                        window.HSApp.audioChunks = [];
-                        window.HSApp.mediaRecorder.ondataavailable = e => window.HSApp.audioChunks.push(e.data);
-                        window.HSApp.mediaRecorder.onstop = () => {
-                            const blob = new Blob(window.HSApp.audioChunks, { type: 'audio/mp3' });
-                            const reader = new FileReader();
-                            reader.onload = e => {
-                                import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, push }) => {
-                                    push(ref(window.HSApp.db, `rooms/${window.HSApp.roomId}/chat`), {
-                                        senderId: window.HSApp.user.uid,
-                                        senderName: window.HSApp.user.name,
-                                        mediaUrl: e.target.result,
-                                        type: 'voice',
-                                        timestamp: Date.now()
-                                    });
-                                });
-                            };
-                            reader.readAsDataURL(blob);
-                        };
-                        window.HSApp.mediaRecorder.start();
-                        window.HSApp.recordingVoice = true;
-                        btn.classList.add('text-rose-500', 'animate-pulse');
-                        showToast("Voice Recorder", "Recording voice note...");
-                    });
-                }
-            } else {
-                if (window.HSApp.mediaRecorder) {
-                    window.HSApp.mediaRecorder.stop();
-                    window.HSApp.recordingVoice = false;
-                    btn.classList.remove('text-rose-500', 'animate-pulse');
-                    showToast("Voice Sent", "Delivered voice note to chat!");
-                }
+        function setupVoicePlayer(item, msg) {
+            const audio = item.querySelector('audio');
+            const btn = item.querySelector('.vplay');
+            const bars = item.querySelectorAll('.vbar');
+            const timeEl = item.querySelector('.vtime');
+            const waveEl = item.querySelector('.vwave');
+            const knownDur = Number(msg.duration) || 0;
+
+            const totalDur = () => (isFinite(audio.duration) && audio.duration > 0) ? audio.duration : knownDur;
+
+            function paint(ratio) {
+                const upTo = Math.floor(ratio * bars.length);
+                bars.forEach((b, i) => b.classList.toggle('on', i < upTo));
             }
+
+            btn.onclick = () => {
+                if (audio.paused) {
+                    document.querySelectorAll('#chatMessagesFeed audio').forEach(a => { if (a !== audio) a.pause(); });
+                    audio.play().catch(() => {});
+                } else {
+                    audio.pause();
+                }
+            };
+            audio.onplay = () => { btn.innerHTML = PAUSE_ICON; };
+            audio.onpause = () => { btn.innerHTML = PLAY_ICON; };
+            audio.onended = () => {
+                btn.innerHTML = PLAY_ICON;
+                paint(0);
+                timeEl.textContent = fmtTime(knownDur || totalDur());
+            };
+            audio.ontimeupdate = () => {
+                const d = totalDur() || 1;
+                paint(Math.min(1, audio.currentTime / d));
+                timeEl.textContent = fmtTime(audio.currentTime);
+            };
+            waveEl.onclick = (e) => {
+                const rect = waveEl.getBoundingClientRect();
+                const ratio = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+                const d = totalDur();
+                if (d) {
+                    try { audio.currentTime = ratio * d; } catch (err) {}
+                    paint(ratio);
+                }
+            };
         }
 
         function updateChatBadgeUI() {
@@ -1381,6 +1772,333 @@
             } else {
                 badge.classList.add('hidden');
             }
+        }
+
+        /* ---------- WhatsApp style voice recording ----------
+           - Mic ko dabaye rakhein = record, chhodein = send
+           - Left slide = cancel
+           - Upar slide = lock (hands-free), phir Send / Trash buttons
+           - Sirf tap karein = lock mode me recording
+        */
+        const REC = {
+            state: 'idle',        // idle | holding | locked
+            recorder: null,
+            stream: null,
+            chunks: [],
+            peaks: [],
+            startTs: 0,
+            pressTs: 0,
+            startX: 0,
+            startY: 0,
+            released: false,
+            timerId: null,
+            waveId: null,
+            audioCtx: null,
+            analyser: null,
+            levels: new Array(28).fill(0)
+        };
+        const MAX_VOICE_SEC = 180;
+
+        function pickMime() {
+            const list = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg;codecs=opus'];
+            for (const m of list) {
+                if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) return m;
+            }
+            return '';
+        }
+
+        function buildRecWave() {
+            const wrap = document.getElementById('recWave');
+            wrap.innerHTML = '';
+            for (let i = 0; i < REC.levels.length; i++) {
+                const b = document.createElement('span');
+                b.className = 'rec-bar';
+                wrap.appendChild(b);
+            }
+        }
+
+        function drawRecWave() {
+            const bars = document.querySelectorAll('#recWave .rec-bar');
+            bars.forEach((b, i) => {
+                b.style.height = (4 + REC.levels[i] * 26) + 'px';
+            });
+        }
+
+        function showRecordingUI(on) {
+            const bar = document.getElementById('recordingBar');
+            const mic = document.getElementById('micBtn');
+            const lockHint = document.getElementById('lockHint');
+            const hint = document.getElementById('recHint');
+            const trash = document.getElementById('recTrashBtn');
+
+            if (on) {
+                bar.classList.remove('hidden');
+                bar.classList.add('flex');
+                mic.classList.add('mic-recording');
+                lockHint.classList.remove('hidden');
+                lockHint.classList.add('flex');
+                hint.classList.remove('hidden');
+                hint.style.transform = '';
+                hint.style.opacity = '1';
+                trash.classList.add('hidden');
+                trash.classList.remove('flex');
+                document.getElementById('recTimer').textContent = '0:00';
+                buildRecWave();
+            } else {
+                bar.classList.add('hidden');
+                bar.classList.remove('flex');
+                mic.classList.remove('mic-recording');
+                lockHint.classList.add('hidden');
+                lockHint.classList.remove('flex');
+                document.getElementById('micIconWrap').classList.remove('hidden');
+                document.getElementById('micSendWrap').classList.add('hidden');
+            }
+        }
+
+        function setLocked() {
+            REC.state = 'locked';
+            document.getElementById('lockHint').classList.add('hidden');
+            document.getElementById('lockHint').classList.remove('flex');
+            document.getElementById('recHint').classList.add('hidden');
+            const trash = document.getElementById('recTrashBtn');
+            trash.classList.remove('hidden');
+            trash.classList.add('flex');
+            // Mic button ab Send button ban jata hai
+            document.getElementById('micIconWrap').classList.add('hidden');
+            document.getElementById('micSendWrap').classList.remove('hidden');
+            if ('vibrate' in navigator) navigator.vibrate(30);
+        }
+
+        function micPointerDown(e) {
+            if (!window.HSApp.roomId) {
+                showToast("Not Paired", "Pehle partner se pair karein!");
+                return;
+            }
+            if (REC.state === 'locked') {
+                e.preventDefault();
+                finishRecording(true);   // locked mode me mic = send
+                return;
+            }
+            if (REC.state !== 'idle') return;
+
+            e.preventDefault();
+            REC.pressTs = Date.now();
+            REC.startX = e.clientX;
+            REC.startY = e.clientY;
+            REC.released = false;
+            try { e.currentTarget.setPointerCapture(e.pointerId); } catch (err) {}
+            startRecording();
+        }
+
+        function micPointerMove(e) {
+            if (REC.state !== 'holding') return;
+            const dx = e.clientX - REC.startX;
+            const dy = e.clientY - REC.startY;
+
+            const hint = document.getElementById('recHint');
+            const shift = Math.min(0, dx);
+            hint.style.transform = `translateX(${shift * 0.6}px)`;
+            hint.style.opacity = String(Math.max(0.2, 1 + shift / 140));
+
+            if (dx < -90) {
+                cancelRecording();
+            } else if (dy < -70) {
+                setLocked();
+            }
+        }
+
+        function micPointerUp(e, forced) {
+            if (REC.state !== 'holding') return;
+
+            // Recorder abhi ready nahi (permission prompt) -> ready hote hi lock mode
+            if (!REC.recorder) {
+                REC.released = true;
+                return;
+            }
+            if (forced) { cancelRecording(); return; }
+
+            const heldMs = Date.now() - REC.pressTs;
+            if (heldMs < 350) {
+                setLocked();             // sirf tap = hands-free lock mode
+            } else {
+                finishRecording(true);   // hold chhoda = send
+            }
+        }
+
+        async function startRecording() {
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+                showToast("Not Supported", "Is browser me voice recording support nahi hai.");
+                return;
+            }
+
+            REC.state = 'holding';
+            REC.chunks = [];
+            REC.peaks = [];
+            REC.levels = new Array(28).fill(0);
+            showRecordingUI(true);
+
+            let stream;
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            } catch (err) {
+                REC.state = 'idle';
+                showRecordingUI(false);
+                showToast("Mic Permission", "Microphone ki permission allow karein.");
+                return;
+            }
+
+            // Permission ke dauran cancel ho gaya?
+            if (REC.state === 'idle') {
+                stream.getTracks().forEach(t => t.stop());
+                return;
+            }
+
+            REC.stream = stream;
+            const mime = pickMime();
+            let recorder;
+            try {
+                recorder = new MediaRecorder(stream, mime ? { mimeType: mime } : undefined);
+            } catch (err) {
+                stream.getTracks().forEach(t => t.stop());
+                REC.state = 'idle';
+                showRecordingUI(false);
+                showToast("Recorder Error", "Recording start nahi ho saki.");
+                return;
+            }
+
+            REC.recorder = recorder;
+            recorder.ondataavailable = (ev) => { if (ev.data && ev.data.size) REC.chunks.push(ev.data); };
+            recorder.start(250);
+            REC.startTs = Date.now();
+
+            window.HSApp.recordingVoice = true;
+            stopTyping();
+            setActivity('recording');
+            if ('vibrate' in navigator) navigator.vibrate(40);
+
+            // Live waveform (analyser)
+            try {
+                const AC = window.AudioContext || window.webkitAudioContext;
+                REC.audioCtx = new AC();
+                const src = REC.audioCtx.createMediaStreamSource(stream);
+                REC.analyser = REC.audioCtx.createAnalyser();
+                REC.analyser.fftSize = 256;
+                src.connect(REC.analyser);
+                const data = new Uint8Array(REC.analyser.fftSize);
+
+                REC.waveId = setInterval(() => {
+                    REC.analyser.getByteTimeDomainData(data);
+                    let max = 0;
+                    for (let i = 0; i < data.length; i++) max = Math.max(max, Math.abs(data[i] - 128));
+                    const level = Math.min(1, max / 80);
+                    REC.peaks.push(level);
+                    REC.levels.shift();
+                    REC.levels.push(level);
+                    drawRecWave();
+                }, 90);
+            } catch (err) { /* waveform optional */ }
+
+            // Timer
+            REC.timerId = setInterval(() => {
+                const sec = (Date.now() - REC.startTs) / 1000;
+                document.getElementById('recTimer').textContent = fmtTime(sec);
+                if (sec >= MAX_VOICE_SEC) finishRecording(true);
+            }, 250);
+
+            // Agar permission prompt ke dauran mic chhod diya tha -> lock mode
+            if (REC.released && REC.state === 'holding') setLocked();
+        }
+
+        function downsamplePeaks(peaks, n = 32) {
+            if (!peaks.length) return fallbackWave('empty', n);
+            const out = [];
+            const step = peaks.length / n;
+            for (let i = 0; i < n; i++) {
+                const from = Math.floor(i * step);
+                const to = Math.max(from + 1, Math.floor((i + 1) * step));
+                let sum = 0, cnt = 0;
+                for (let j = from; j < to && j < peaks.length; j++) { sum += peaks[j]; cnt++; }
+                out.push(cnt ? sum / cnt : 0);
+            }
+            const max = Math.max(...out, 0.05);
+            return out.map(v => Math.round(Math.max(0.12, v / max) * 100) / 100);
+        }
+
+        function cleanupRecording() {
+            clearInterval(REC.timerId);
+            clearInterval(REC.waveId);
+            REC.timerId = null;
+            REC.waveId = null;
+            if (REC.stream) REC.stream.getTracks().forEach(t => t.stop());
+            if (REC.audioCtx) { try { REC.audioCtx.close(); } catch (e) {} }
+            REC.stream = null;
+            REC.audioCtx = null;
+            REC.analyser = null;
+            REC.recorder = null;
+            REC.state = 'idle';
+            window.HSApp.recordingVoice = false;
+            setActivity(null);
+            showRecordingUI(false);
+        }
+
+        function finishRecording(send) {
+            if (REC.state === 'idle') return;
+
+            const recorder = REC.recorder;
+            if (!recorder) {            // abhi recorder bana hi nahi
+                cleanupRecording();
+                return;
+            }
+
+            const snapshot = {
+                send: !!send,
+                duration: (Date.now() - REC.startTs) / 1000,
+                chunks: REC.chunks,
+                peaks: REC.peaks.slice(),
+                mime: recorder.mimeType || ''
+            };
+
+            recorder.onstop = () => handleRecorded(snapshot);
+            try {
+                if (recorder.state !== 'inactive') recorder.stop();
+                else handleRecorded(snapshot);
+            } catch (e) {
+                handleRecorded(snapshot);
+            }
+            cleanupRecording();
+        }
+
+        function cancelRecording() {
+            if (REC.state === 'idle') return;
+            if ('vibrate' in navigator) navigator.vibrate([30, 30]);
+            finishRecording(false);
+        }
+
+        function handleRecorded(s) {
+            if (!s.send) return;                       // cancel
+            if (s.duration < 0.8) {
+                showToast("Voice Note", "Bohat chhota hai, mic ko thora der dabaye rakhein.");
+                return;
+            }
+            if (!window.HSApp.roomId) return;
+
+            const blob = new Blob(s.chunks, { type: s.mime || 'audio/webm' });
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const A = window.HSApp;
+                if (!A.roomId) return;
+                window.FB.push(window.FB.ref(A.db, `rooms/${A.roomId}/chat`), {
+                    senderId: A.user.uid,
+                    senderName: A.user.name,
+                    mediaUrl: e.target.result,
+                    type: 'voice',
+                    duration: Math.round(s.duration),
+                    wave: downsamplePeaks(s.peaks, 32),
+                    status: 'sent',
+                    timestamp: Date.now()
+                });
+            };
+            reader.readAsDataURL(blob);
         }
 
         // 6. Interactive Heart Signals & Touch Lamp
@@ -1511,7 +2229,14 @@
 
         // Navigation Tabs Switcher
         function switchTab(tab) {
+            const prevTab = window.HSApp.activeTab;
             window.HSApp.activeTab = tab;
+
+            // Chat chhor kar jaate waqt typing / recording band
+            if (prevTab === 'chat' && tab !== 'chat') {
+                stopTyping();
+                if (REC.state !== 'idle') cancelRecording();
+            }
 
             if (tab === 'chat') {
                 window.HSApp.unreadChatCount = 0;
@@ -1533,6 +2258,13 @@
                     }
                 }
             });
+
+            if (tab === 'chat') {
+                const feed = document.getElementById('chatMessagesFeed');
+                if (feed) feed.scrollTop = feed.scrollHeight;
+                // Chat khulte hi partner ke messages "seen" (blue tick)
+                if (window.markChatSeen) window.markChatSeen();
+            }
         }
 
         // Toast Engine
@@ -1565,7 +2297,7 @@
         }
 
         function escapeHtml(str) {
-            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+            return String(str || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
         }
 
         // Global Bindings
@@ -1580,7 +2312,13 @@
         window.saveSecretNote = saveSecretNote;
         window.sendChatMessage = sendChatMessage;
         window.handleFileUpload = handleFileUpload;
-        window.toggleVoiceRecording = toggleVoiceRecording;
+        window.onChatInput = onChatInput;
+        window.micPointerDown = micPointerDown;
+        window.micPointerMove = micPointerMove;
+        window.micPointerUp = micPointerUp;
+        window.cancelRecording = cancelRecording;
+        window.refreshChatSubtitle = refreshChatSubtitle;
+        window.resetChatFeed = resetChatFeed;
         window.handleHeartClick = handleHeartClick;
         window.startHeartbeatHold = startHeartbeatHold;
         window.stopHeartbeatHold = stopHeartbeatHold;
