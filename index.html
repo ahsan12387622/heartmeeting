@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeartSync - Real-Time Hub</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <style>
+        @keyframes pulse-slow {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.08); opacity: 0.85; }
+        }
+        .animate-pulse-slow { animation: pulse-slow 2s infinite ease-in-out; }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen font-sans">
+
+    <!-- AUTH SCREEN -->
+    <div id="authScreen" class="flex items-center justify-center min-h-screen p-4">
+        <div class="bg-slate-900 border border-slate-800 p-8 rounded-2xl w-full max-w-md shadow-2xl">
+            <h1 class="text-3xl font-extrabold text-rose-500 text-center mb-2">HeartSync ❤️</h1>
+            <p class="text-slate-400 text-center text-sm mb-6">Apne partner ya friend ke sath live connect hon</p>
+            
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Aapka Naam</label>
+                    <input type="text" id="inputName" placeholder="Jaise: Aryan" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:outline-none focus:border-rose-500 text-slate-100">
+                </div>
+                <div>
+                    <label class="block text-xs uppercase tracking-wider text-slate-400 mb-1">Bio / Status</label>
+                    <input type="text" id="inputBio" placeholder="Kuch khas line..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 focus:outline-none focus:border-rose-500 text-slate-100">
+                </div>
+                <button onclick="handleLogin()" class="w-full bg-gradient-to-r from-rose-500 to-pink-600 font-semibold py-3 rounded-xl shadow-lg hover:opacity-90 transition">Account Banayein / Login</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN APP DASHBOARD -->
+    <div id="mainApp" class="hidden flex flex-col h-screen max-w-md mx-auto bg-slate-900 border-x border-slate-800">
+        <!-- Top Header -->
+        <div class="p-4 bg-slate-950 border-b border-slate-800 flex justify-between items-center">
+            <div>
+                <h2 id="userNameDisplay" class="font-bold text-lg text-rose-400"></h2>
+                <span class="text-xs text-slate-500">UID: <strong id="userUidDisplay" class="text-slate-300"></strong></span>
+            </div>
+            <button onclick="logout()" class="text-xs bg-slate-800 hover:bg-slate-700 px-3 py-1.5 rounded-lg text-slate-300">Logout</button>
+        </div>
+
+        <!-- Content Area -->
+        <div id="tabContent" class="flex-1 overflow-y-auto p-4 space-y-6">
+            <!-- Dynamic content loads here -->
+        </div>
+
+        <!-- Bottom Navigation Tabs -->
+        <div class="grid grid-cols-4 bg-slate-950 border-t border-slate-800 py-3 text-center text-xs text-slate-400">
+            <button onclick="switchTab('heart')" class="flex flex-col items-center hover:text-rose-400">❤️ <span class="mt-1">Heart</span></button>
+            <button onclick="switchTab('chat')" class="flex flex-col items-center hover:text-rose-400">💬 <span class="mt-1">Chat</span></button>
+            <button onclick="switchTab('friends')" class="flex flex-col items-center hover:text-rose-400">👥 <span class="mt-1">Requests</span></button>
+            <button onclick="switchTab('profile')" class="flex flex-col items-center hover:text-rose-400">⚙️ <span class="mt-1">Profile</span></button>
+        </div>
+    </div>
+
+    <script>
+        // --- FIREBASE CONFIGURATION (Connected) ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyAt3fk89mQnAvkDwiXYTXpd5ofz5SKEEgE",
+            authDomain: "heartmeeting-b9bc1.firebaseapp.com",
+            databaseURL: "https://heartmeeting-b9bc1-default-rtdb.firebaseio.com",
+            projectId: "heartmeeting-b9bc1",
+            storageBucket: "heartmeeting-b9bc1.appspot.com",
+            messagingSenderId: "671048458607",
+            appId: "1:671048458607:web:0e911f82ccdc59896c889a"
+        };
+
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+
+        let currentUser = JSON.parse(localStorage.getItem('hs_user')) || null;
+
+        if (currentUser) {
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            initApp();
+        }
+
+        function handleLogin() {
+            const name = document.getElementById('inputName').value.trim();
+            const bio = document.getElementById('inputBio').value.trim() || "Available";
+            if (!name) {
+                alert("Apna naam lazmi likhein!");
+                return;
+            }
+
+            const uid = 'HS-' + Math.floor(1000 + Math.random() * 9000);
+            currentUser = { uid, name, bio, partnerUid: null, roomId: null };
+            
+            db.ref('users/' + uid).set(currentUser);
+            localStorage.setItem('hs_user', JSON.stringify(currentUser));
+
+            document.getElementById('authScreen').classList.add('hidden');
+            document.getElementById('mainApp').classList.remove('hidden');
+            initApp();
+        }
+
+        function initApp() {
+            document.getElementById('userNameDisplay').innerText = currentUser.name;
+            document.getElementById('userUidDisplay').innerText = currentUser.uid;
+            switchTab('heart');
+            
+            db.ref('users/' + currentUser.uid).on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    currentUser = snapshot.val();
+                    localStorage.setItem('hs_user', JSON.stringify(currentUser));
+                }
+            });
+        }
+
+        function switchTab(tab) {
+            const content = document.getElementById('tabContent');
+            if (tab === 'heart') {
+                content.innerHTML = `
+                    <div class="flex flex-col items-center justify-center h-full py-10 space-y-6">
+                        <div class="text-center">
+                            <h3 class="text-xl font-bold">Virtual Heartbeat</h3>
+                            <p class="text-xs text-slate-400">Tap karne par partner ko live notification jayegi</p>
+                        </div>
+                        <div onclick="sendHeartSignal()" class="w-44 h-44 bg-rose-500/20 border-2 border-rose-500 rounded-full flex items-center justify-center cursor-pointer animate-pulse-slow shadow-lg shadow-rose-500/30">
+                            <span class="text-7xl">❤️</span>
+                        </div>
+                        <div id="signalStatus" class="text-xs text-rose-400 h-6"></div>
+                    </div>
+                `;
+                listenToSignals();
+            } else if (tab === 'friends') {
+                content.innerHTML = `
+                    <div class="space-y-4">
+                        <h3 class="font-bold text-base">Partner Connect Karein</h3>
+                        <div class="space-y-2">
+                            <input type="text" id="targetUid" placeholder="Partner ki UID dalein (jaise HS-1234)" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-rose-500">
+                            <button onclick="sendFriendRequest()" class="w-full bg-rose-600 font-semibold py-2.5 rounded-xl text-sm">Request Bhejein</button>
+                        </div>
+                        <div id="incomingRequests" class="mt-6">
+                            <h4 class="text-xs text-slate-400 uppercase tracking-wider mb-2">Incoming Requests</h4>
+                            <div id="requestList" class="space-y-2"></div>
+                        </div>
+                    </div>
+                `;
+                loadRequests();
+            } else if (tab === 'chat') {
+                if (!currentUser.roomId) {
+                    content.innerHTML = `<div class="text-center text-slate-500 py-20">Pehle 'Requests' tab se kisi ko partner banayein taake chat shuru ho sake.</div>`;
+                    return;
+                }
+                content.innerHTML = `
+                    <div class="flex flex-col h-full justify-between">
+                        <div id="chatMessages" class="flex-1 overflow-y-auto space-y-3 pr-2 mb-4"></div>
+                        <div class="flex gap-2">
+                            <input type="text" id="chatInput" placeholder="Message likhein..." class="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2 text-sm focus:outline-none focus:border-rose-500">
+                            <button onclick="sendMessage()" class="bg-rose-600 px-4 py-2 rounded-xl text-sm font-semibold">Bhejo</button>
+                        </div>
+                    </div>
+                `;
+                loadMessages();
+            } else if (tab === 'profile') {
+                content.innerHTML = `
+                    <div class="space-y-4">
+                        <h3 class="font-bold">Aapki Profile</h3>
+                        <div class="bg-slate-950 p-4 rounded-xl border border-slate-800 space-y-2">
+                            <p class="text-sm"><strong>Name:</strong> ${currentUser.name}</p>
+                            <p class="text-sm"><strong>UID:</strong> ${currentUser.uid}</p>
+                            <p class="text-sm"><strong>Status:</strong> ${currentUser.bio}</p>
+                        </div>
+                        ${currentUser.roomId ? `<button onclick="unpairRoom()" class="w-full bg-red-600/20 text-red-400 border border-red-500/30 py-2.5 rounded-xl text-sm">Unpair / Room Chhorein</button>` : ''}
+                    </div>
+                `;
+            }
+        }
+
+        function sendFriendRequest() {
+            const targetUid = document.getElementById('targetUid').value.trim();
+            if (!targetUid || targetUid === currentUser.uid) {
+                alert("Theek UID darj karein!");
+                return;
+            }
+            db.ref('requests/' + targetUid + '/' + currentUser.uid).set({
+                fromUid: currentUser.uid,
+                fromName: currentUser.name
+            });
+            alert("Request bhej di gayi hai!");
+        }
+
+        function loadRequests() {
+            db.ref('requests/' + currentUser.uid).on('value', (snapshot) => {
+                const list = document.getElementById('requestList');
+                if (!list) return;
+                list.innerHTML = '';
+                if (!snapshot.exists()) {
+                    list.innerHTML = `<p class="text-xs text-slate-500">Koi request nahi hai.</p>`;
+                    return;
+                }
+                snapshot.forEach((child) => {
+                    const req = child.val();
+                    list.innerHTML += `
+                        <div class="flex justify-between items-center bg-slate-950 p-3 rounded-xl border border-slate-800">
+                            <span class="text-sm">${req.fromName} (${req.fromUid})</span>
+                            <button onclick="acceptRequest('${req.fromUid}')" class="bg-green-600 text-xs px-3 py-1.5 rounded-lg font-semibold">Accept</button>
+                        </div>
+                    `;
+                });
+            });
+        }
+
+        function acceptRequest(partnerUid) {
+            const roomId = 'room_' + [currentUser.uid, partnerUid].sort().join('_');
+            
+            db.ref('users/' + currentUser.uid).update({ partnerUid, roomId });
+            db.ref('users/' + partnerUid).update({ partnerUid: currentUser.uid, roomId });
+            
+            db.ref('requests/' + currentUser.uid).remove();
+            alert("Aapka room ban gaya hai!");
+            switchTab('chat');
+        }
+
+        function unpairRoom() {
+            if (currentUser.partnerUid) {
+                db.ref('users/' + currentUser.partnerUid).update({ partnerUid: null, roomId: null });
+            }
+            db.ref('users/' + currentUser.uid).update({ partnerUid: null, roomId: null });
+            alert("Aap unpair ho gaye hain.");
+            location.reload();
+        }
+
+        function sendHeartSignal() {
+            if (!currentUser.roomId) {
+                alert("Pehle kisi ko friend banayein!");
+                return;
+            }
+            db.ref('signals/' + currentUser.roomId).set({
+                sender: currentUser.name,
+                timestamp: Date.now()
+            });
+            document.getElementById('signalStatus').innerText = "Signal Bhej diya gaya hai! ❤️";
+            setTimeout(() => { document.getElementById('signalStatus').innerText = ""; }, 3000);
+        }
+
+        function listenToSignals() {
+            if (!currentUser.roomId) return;
+            db.ref('signals/' + currentUser.roomId).on('value', (snapshot) => {
+                if (snapshot.exists()) {
+                    const data = snapshot.val();
+                    if (data.sender !== currentUser.name) {
+                        const status = document.getElementById('signalStatus');
+                        if (status) status.innerText = `${data.sender} ne aapko yaad kiya hai! ❤️`;
+                    }
+                }
+            });
+        }
+
+        function sendMessage() {
+            const text = document.getElementById('chatInput').value.trim();
+            if (!text || !currentUser.roomId) return;
+            
+            db.ref('chats/' + currentUser.roomId).push({
+                sender: currentUser.name,
+                text: text,
+                time: Date.now()
+            });
+            document.getElementById('chatInput').value = '';
+        }
+
+        function loadMessages() {
+            if (!currentUser.roomId) return;
+            db.ref('chats/' + currentUser.roomId).on('value', (snapshot) => {
+                const box = document.getElementById('chatMessages');
+                if (!box) return;
+                box.innerHTML = '';
+                snapshot.forEach((child) => {
+                    const msg = child.val();
+                    const isMe = msg.sender === currentUser.name;
+                    box.innerHTML += `
+                        <div class="flex ${isMe ? 'justify-end' : 'justify-start'}">
+                            <div class="max-w-[75%] bg-${isMe ? 'rose-600' : 'slate-800'} p-3 rounded-2xl text-sm">
+                                <p class="text-xs text-slate-300 mb-0.5">${msg.sender}</p>
+                                <p>${msg.text}</p>
+                            </div>
+                        </div>
+                    `;
+                });
+                box.scrollTop = box.scrollHeight;
+            });
+        }
+
+        function logout() {
+            localStorage.removeItem('hs_user');
+            location.reload();
+        }
+    </script>
+</body>
+</html>
