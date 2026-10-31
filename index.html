@@ -3,64 +3,24 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>HeartSync - Real-Time Love & Friendship Hub ❤️</title>
+    <title>HeartSync Pro - Real-Time Love & Friendship Hub ❤️</title>
 
     <!-- Tailwind CSS CDN -->
-    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
 
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
 
+    <!-- Canvas Confetti for Celebration Effects -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
     <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600;700&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
-
-    <script>
-        tailwind.config = {
-            theme: {
-                extend: {
-                    fontFamily: {
-                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
-                        serif: ['"Playfair Display"', 'serif'],
-                        cursive: ['"Dancing Script"', 'cursive'],
-                    },
-                    colors: {
-                        love: {
-                            50: '#fff1f2',
-                            100: '#ffe4e6',
-                            200: '#fecdd3',
-                            300: '#fda4af',
-                            400: '#fb7185',
-                            500: '#f43f5e',
-                            600: '#e11d48',
-                            700: '#be123c',
-                            800: '#9f1239',
-                            900: '#881337',
-                        }
-                    },
-                    animation: {
-                        'pulse-slow': 'pulse 3s infinite ease-in-out',
-                        'float': 'float 6s ease-in-out infinite',
-                        'glow-pulse': 'glowPulse 2s infinite ease-in-out',
-                    },
-                    keyframes: {
-                        float: {
-                            '0%, 100%': { transform: 'translateY(0px)' },
-                            '50%': { transform: 'translateY(-10px)' },
-                        },
-                        glowPulse: {
-                            '0%, 100%': { opacity: '0.4', filter: 'blur(20px)' },
-                            '50%': { opacity: '0.9', filter: 'blur(35px)' },
-                        }
-                    }
-                }
-            }
-        }
-    </script>
 
     <style>
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
-            background: linear-gradient(135deg, #070a12 0%, #150a21 40%, #250617 100%);
+            background: linear-gradient(135deg, #05070f 0%, #11071c 40%, #1f0413 100%);
             min-height: 100vh;
             color: #f8fafc;
             overflow-x: hidden;
@@ -73,27 +33,27 @@
             width: 100vw;
             height: 100vh;
             pointer-events: none;
-            z-index: 1;
+            z-index: 2;
         }
 
         .glass-panel {
-            background: rgba(255, 255, 255, 0.04);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            background: rgba(255, 255, 255, 0.035);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.6);
         }
 
         .glass-input {
             background: rgba(255, 255, 255, 0.06);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(12px);
             border: 1px solid rgba(255, 255, 255, 0.15);
             color: #ffffff;
         }
 
         .glass-input:focus {
-            background: rgba(255, 255, 255, 0.1);
-            border-color: rgba(244, 63, 94, 0.6);
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(244, 63, 94, 0.7);
             outline: none;
         }
 
@@ -104,7 +64,7 @@
             z-index: 40;
             opacity: 0;
             transition: opacity 0.6s ease-in-out;
-            background: radial-gradient(circle at center, rgba(244, 63, 94, 0.55) 0%, rgba(225, 29, 72, 0.25) 50%, transparent 80%);
+            background: radial-gradient(circle at center, rgba(244, 63, 94, 0.6) 0%, rgba(225, 29, 72, 0.25) 50%, transparent 80%);
         }
 
         .glow-active {
@@ -117,37 +77,51 @@
             100% { opacity: 1; }
         }
 
+        /* Full Screen Banner Animation Overlay for Signals */
+        .signal-banner {
+            position: fixed;
+            top: 15%;
+            left: 50%;
+            transform: translateX(-50%) scale(0.7);
+            z-index: 60;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .signal-banner-active {
+            opacity: 1;
+            transform: translateX(-50%) scale(1);
+        }
+
         .lamp-off {
             background: rgba(255, 255, 255, 0.05);
             border-color: rgba(255, 255, 255, 0.15);
             box-shadow: none;
         }
         .lamp-on {
-            background: radial-gradient(circle, rgba(253, 224, 71, 0.45) 0%, rgba(244, 63, 94, 0.2) 70%);
-            border-color: rgba(253, 224, 71, 0.85);
-            box-shadow: 0 0 35px rgba(253, 224, 71, 0.6), inset 0 0 20px rgba(253, 224, 71, 0.4);
+            background: radial-gradient(circle, rgba(253, 224, 71, 0.5) 0%, rgba(244, 63, 94, 0.25) 70%);
+            border-color: rgba(253, 224, 71, 0.9);
+            box-shadow: 0 0 45px rgba(253, 224, 71, 0.7), inset 0 0 25px rgba(253, 224, 71, 0.5);
         }
 
         ::-webkit-scrollbar {
-            width: 6px;
+            width: 5px;
         }
         ::-webkit-scrollbar-track {
-            background: rgba(7, 10, 18, 0.8);
+            background: rgba(5, 7, 15, 0.9);
         }
         ::-webkit-scrollbar-thumb {
-            background: rgba(244, 63, 94, 0.4);
+            background: rgba(244, 63, 94, 0.5);
             border-radius: 9999px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: rgba(244, 63, 94, 0.8);
         }
     </style>
 
-    <!-- Firebase SDK Modules -->
+    <!-- Firebase Modular SDK -->
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getDatabase, ref, push, onChildAdded, onValue, set, update, remove } 
+        import { getDatabase, ref, push, onChildAdded, onValue, set, update, remove, get, onDisconnect, serverTimestamp } 
             from "https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js";
 
         window.HSApp = {
@@ -160,10 +134,10 @@
             audioCtx: null,
             recordingVoice: false,
             mediaRecorder: null,
-            audioChunks: []
+            audioChunks: [],
+            unreadChatCount: 0
         };
 
-        // User's Direct Firebase Credentials
         const firebaseConfig = {
             apiKey: "AIzaSyAt3fk89mQnAvkDwiXYTXpd5ofz5SKEEgE",
             authDomain: "heartmeeting-b9bc1.firebaseapp.com",
@@ -179,7 +153,7 @@
         const db = getDatabase(app);
         window.HSApp.db = db;
 
-        // Web Audio Synthesizer
+        // Audio Synthesizer
         function playAudio(type = 'ping') {
             if (!window.HSApp.soundEnabled) return;
             try {
@@ -191,14 +165,14 @@
 
                 const now = ctx.currentTime;
 
-                if (type === 'ping') {
+                if (type === 'ping' || type === 'kiss' || type === 'hug') {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
                     osc.type = 'sine';
-                    osc.frequency.setValueAtTime(523.25, now);
-                    osc.frequency.exponentialRampToValueAtTime(1046.50, now + 0.25);
+                    osc.frequency.setValueAtTime(type === 'kiss' ? 784 : 523.25, now);
+                    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.3);
 
-                    gain.gain.setValueAtTime(0.3, now);
+                    gain.gain.setValueAtTime(0.35, now);
                     gain.gain.exponentialRampToValueAtTime(0.001, now + 1.2);
 
                     osc.connect(gain);
@@ -211,10 +185,10 @@
                         const osc = ctx.createOscillator();
                         const gain = ctx.createGain();
                         osc.type = 'sine';
-                        osc.frequency.setValueAtTime(95, now + delay);
-                        osc.frequency.exponentialRampToValueAtTime(35, now + delay + 0.12);
+                        osc.frequency.setValueAtTime(100, now + delay);
+                        osc.frequency.exponentialRampToValueAtTime(30, now + delay + 0.12);
 
-                        gain.gain.setValueAtTime(0.65, now + delay);
+                        gain.gain.setValueAtTime(0.7, now + delay);
                         gain.gain.exponentialRampToValueAtTime(0.01, now + delay + 0.14);
 
                         osc.connect(gain);
@@ -229,7 +203,7 @@
         }
         window.playAudio = playAudio;
 
-        // Auto Authenticate & Check Session
+        // Check Existing Session on Load
         signInAnonymously(auth).then(() => {
             checkUserSession();
         }).catch(() => {
@@ -237,19 +211,53 @@
         });
 
         function checkUserSession() {
-            const savedUser = localStorage.getItem('hs_user');
+            const savedUser = localStorage.getItem('hs_user_account');
             if (savedUser) {
-                window.HSApp.user = JSON.parse(savedUser);
-                onUserLoggedIn();
+                const parsed = JSON.parse(savedUser);
+                // Re-verify from Firebase DB
+                const userRef = ref(db, `users/${parsed.uid}`);
+                get(userRef).then(snap => {
+                    if (snap.exists()) {
+                        window.HSApp.user = snap.val();
+                        localStorage.setItem('hs_user_account', JSON.stringify(window.HSApp.user));
+                        onUserLoggedIn();
+                    } else {
+                        showAuthScreen();
+                    }
+                }).catch(() => showAuthScreen());
             } else {
                 showAuthScreen();
             }
+        }
+
+        // Setup Realtime Presence System (Online/Offline)
+        function setupPresenceSystem() {
+            if (!window.HSApp.user) return;
+            const uid = window.HSApp.user.uid;
+            const myStatusRef = ref(db, `status/${uid}`);
+            const connectedRef = ref(db, '.info/connected');
+
+            onValue(connectedRef, (snap) => {
+                if (snap.val() === true) {
+                    onDisconnect(myStatusRef).set({
+                        state: 'offline',
+                        lastSeen: serverTimestamp()
+                    });
+
+                    set(myStatusRef, {
+                        state: 'online',
+                        lastSeen: serverTimestamp()
+                    });
+                }
+            });
         }
 
         // Realtime Database Listeners for User & Room State
         function initRealtimeListeners() {
             if (!window.HSApp.user) return;
             const uid = window.HSApp.user.uid;
+
+            setupPresenceSystem();
 
             // Listen for Friend Requests
             const requestsRef = ref(db, `requests/${uid}`);
@@ -258,17 +266,16 @@
                 renderFriendRequests(reqs);
             });
 
-            // Listen for User Profile Updates (Pairing status)
+            // Listen for Profile & Pairing Status Changes
             const userRef = ref(db, `users/${uid}`);
             onValue(userRef, (snapshot) => {
                 const data = snapshot.val();
                 if (!data) return;
 
                 window.HSApp.user = { ...window.HSApp.user, ...data };
-                localStorage.setItem('hs_user', JSON.stringify(window.HSApp.user));
+                localStorage.setItem('hs_user_account', JSON.stringify(window.HSApp.user));
                 updateProfileUI();
 
-                // If paired, join Room
                 if (data.pairedRoomId && data.partnerUid) {
                     joinRoom(data.pairedRoomId, data.partnerUid);
                 } else {
@@ -284,7 +291,7 @@
         function joinRoom(roomId, partnerUid) {
             window.HSApp.roomId = roomId;
 
-            // Fetch Partner Profile
+            // Fetch Partner Profile & Presence
             const partnerRef = ref(db, `users/${partnerUid}`);
             onValue(partnerRef, (snapshot) => {
                 const pData = snapshot.val();
@@ -294,7 +301,14 @@
                 }
             });
 
-            // Listen for Realtime Pings
+            // Partner Presence Listener
+            const partnerStatusRef = ref(db, `status/${partnerUid}`);
+            onValue(partnerStatusRef, (snap) => {
+                const st = snap.val();
+                updatePartnerOnlineBadge(st);
+            });
+
+            // Listen for Signal Actions (Hugs, Kisses, Heartbeats)
             const pingsRef = ref(db, `rooms/${roomId}/pings`);
             let isInitialPing = true;
             onChildAdded(pingsRef, (snapshot) => {
@@ -302,20 +316,32 @@
                 if (!data) return;
 
                 if (!isInitialPing && data.senderId !== window.HSApp.user.uid) {
-                    onPartnerPingReceived(data);
+                    onPartnerSignalReceived(data);
                 }
             });
-            setTimeout(() => { isInitialPing = false; }, 1000);
+            setTimeout(() => { isInitialPing = false; }, 1200);
 
             // Listen for Realtime Chat Messages
             const chatRef = ref(db, `rooms/${roomId}/chat`);
             document.getElementById('chatMessagesFeed').innerHTML = '';
+            let isInitialChat = true;
+
             onChildAdded(chatRef, (snapshot) => {
                 const msg = snapshot.val();
-                if (msg) renderChatMessage(msg, snapshot.key);
-            });
+                if (msg) {
+                    renderChatMessage(msg, snapshot.key);
 
-            // Listen for Room State (Touch Lamp, Mood)
+                    // Unread Message Badge Handler
+                    if (!isInitialChat && msg.senderId !== window.HSApp.user.uid && window.HSApp.activeTab !== 'chat') {
+                        window.HSApp.unreadChatCount++;
+                        updateChatBadgeUI();
+                        playAudio('ping');
+                    }
+                }
+            });
+            setTimeout(() => { isInitialChat = false; }, 1200);
+
+            // Room State (Lamp, Mood)
             const stateRef = ref(db, `rooms/${roomId}/state`);
             onValue(stateRef, (snapshot) => {
                 const st = snapshot.val();
@@ -329,45 +355,57 @@
                 }
             });
 
-            // Listen for Secret Love Notes
+            // Shared Notes
             const notesRef = ref(db, `rooms/${roomId}/notes`);
             onValue(notesRef, (snapshot) => {
-                const notes = snapshot.val();
-                renderSecretNotes(notes);
+                renderSecretNotes(snapshot.val());
             });
         }
 
-        // Partner Signal Received
-        function onPartnerPingReceived(data) {
-            playAudio('ping');
-            setTimeout(() => playAudio('heartbeat'), 250);
+        // Action Signal Handler (Animation + Overlay + Sound)
+        function onPartnerSignalReceived(data) {
+            const actionType = data.type || 'heart';
+            playAudio(actionType === 'kiss' ? 'kiss' : (actionType === 'hug' ? 'hug' : 'ping'));
+            setTimeout(() => playAudio('heartbeat'), 200);
 
             if ('vibrate' in navigator) navigator.vibrate([100, 50, 150, 50, 200]);
 
             const glow = document.getElementById('glowOverlay');
             glow.classList.add('glow-active');
-            setTimeout(() => glow.classList.remove('glow-active'), 2500);
+            setTimeout(() => glow.classList.remove('glow-active'), 2800);
 
-            showToast(`${window.HSApp.partner.name || 'Partner'} Misses You! ❤️`, `${data.action || 'Sent a heartbeat wave'}`);
-            triggerBrowserNotification(`${window.HSApp.partner.name} is thinking of you! ❤️`, data.action || 'Open HeartSync to send love back!');
-            createParticleBurst(window.innerWidth / 2, window.innerHeight / 2, 35);
+            // Trigger Banner Overlay
+            showSignalBanner(data.icon || '❤️', data.title || 'Love Signal!', data.action || 'Thinking of you');
+
+            // Trigger Particle Explosion & Confetti
+            if (actionType === 'kiss' || actionType === 'sparkles') {
+                confetti({ particleCount: 70, spread: 80, origin: { y: 0.6 } });
+            }
+            createParticleBurst(window.innerWidth / 2, window.innerHeight / 2, 40);
+
+            showToast(`${window.HSApp.partner?.name || 'Partner'} ${data.icon || '❤️'}`, data.action || 'Sent a romantic wave!');
         }
 
-        // Web Browser Notification API
-        function triggerBrowserNotification(title, body) {
-            if ("Notification" in window) {
-                if (Notification.permission === "granted") {
-                    new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/833/833472.png" });
-                } else if (Notification.permission !== "denied") {
-                    Notification.requestPermission().then(permission => {
-                        if (permission === "granted") {
-                            new Notification(title, { body });
-                        }
-                    });
+        function updatePartnerOnlineBadge(statusObj) {
+            const textEl = document.getElementById('partnerOnlineStatus');
+            const dotEl = document.getElementById('partnerOnlineDot');
+            if (!textEl || !dotEl) return;
+
+            if (statusObj && statusObj.state === 'online') {
+                textEl.innerText = 'Online';
+                textEl.className = 'text-[10px] text-emerald-400 font-semibold';
+                dotEl.className = 'w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse';
+            } else {
+                let lastSeenText = 'Offline';
+                if (statusObj && statusObj.lastSeen) {
+                    const time = new Date(statusObj.lastSeen).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    lastSeenText = `Last seen ${time}`;
                 }
+                textEl.innerText = lastSeenText;
+                textEl.className = 'text-[10px] text-slate-400';
+                dotEl.className = 'w-2.5 h-2.5 rounded-full bg-slate-500';
             }
         }
-        window.triggerBrowserNotification = triggerBrowserNotification;
     </script>
 </head>
 <body class="relative flex flex-col min-h-screen">
@@ -375,56 +413,80 @@
     <div id="glowOverlay" class="glow-overlay"></div>
     <canvas id="heartCanvas"></canvas>
 
+    <!-- Signal Banner Overlay for Interactive Hugs & Kisses -->
+    <div id="signalBanner" class="signal-banner">
+        <div class="glass-panel px-8 py-6 rounded-3xl border-2 border-rose-500/60 shadow-2xl flex flex-col items-center space-y-2 text-center backdrop-blur-3xl bg-slate-950/90">
+            <span id="bannerIcon" class="text-6xl animate-bounce">💋</span>
+            <h3 id="bannerTitle" class="font-serif font-bold text-2xl text-white">Virtual Kiss Received!</h3>
+            <p id="bannerSub" class="text-xs text-rose-300 font-medium">Your partner sent you a sweet kiss!</p>
+        </div>
+    </div>
+
     <!-- Toast Notification Container -->
     <div id="toastStack" class="fixed top-5 right-5 left-5 md:left-auto md:w-96 z-50 flex flex-col space-y-3 pointer-events-none items-center md:items-end"></div>
 
-    <!-- AUTHENTICATION / PROFILE SETUP SCREEN -->
-    <div id="authScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-2xl">
+    <!-- AUTHENTICATION (LOGIN / SIGNUP) SCREEN -->
+    <div id="authScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/95 backdrop-blur-2xl">
         <div class="glass-panel w-full max-w-md p-6 md:p-8 rounded-3xl border border-rose-500/30 space-y-6 shadow-2xl">
+            
             <div class="text-center space-y-2">
-                <div class="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-rose-600 via-pink-500 to-amber-400 flex items-center justify-center shadow-lg shadow-rose-500/30">
+                <div class="w-16 h-16 mx-auto rounded-3xl bg-gradient-to-tr from-rose-600 via-pink-500 to-amber-400 flex items-center justify-center shadow-lg shadow-rose-500/40">
                     <i data-lucide="heart-pulse" class="w-9 h-9 text-white fill-white"></i>
                 </div>
-                <h2 class="font-serif text-3xl font-bold text-white">HeartSync Setup</h2>
-                <p class="text-xs text-slate-300">Create your romantic profile & get your unique UID to connect with your partner!</p>
+                <h2 class="font-serif text-3xl font-bold text-white">HeartSync Pro</h2>
+                <p class="text-xs text-slate-300">Sign in with your username & password to enter your romantic room!</p>
             </div>
 
-            <div class="space-y-4">
+            <!-- Login / Signup Form Switcher -->
+            <div class="flex border-b border-white/10 text-xs font-bold">
+                <button onclick="toggleAuthMode('login')" id="tabLogin" class="flex-1 py-2 text-center text-rose-400 border-b-2 border-rose-500">Sign In</button>
+                <button onclick="toggleAuthMode('signup')" id="tabSignup" class="flex-1 py-2 text-center text-slate-400 hover:text-white">Create Account</button>
+            </div>
+
+            <div class="space-y-3.5">
                 <div>
-                    <label class="text-xs text-slate-300 font-semibold block mb-1">Display Name</label>
-                    <input type="text" id="authName" placeholder="e.g. Aryan / Ayesha" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">Username</label>
+                    <input type="text" id="authUsername" placeholder="e.g. aryan123" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
                 </div>
                 <div>
-                    <label class="text-xs text-slate-300 font-semibold block mb-1">Your Bio / Relationship Status</label>
-                    <input type="text" id="authBio" placeholder="e.g. Forever & Always ❤️" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
+                    <label class="text-xs text-slate-300 font-semibold block mb-1">Password</label>
+                    <input type="password" id="authPassword" placeholder="••••••••" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
                 </div>
-                <div>
-                    <label class="text-xs text-slate-300 font-semibold block mb-1">Avatar / DP (Optional Picture URL)</label>
-                    <input type="text" id="authDp" placeholder="https://images.unsplash.com/photo-..." class="w-full px-4 py-3 rounded-xl glass-input text-sm">
-                </div>
-                <div>
-                    <label class="text-xs text-slate-300 font-semibold block mb-1">Together Date (Optional)</label>
-                    <input type="date" id="authDate" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
+
+                <!-- Extra Fields for Signup -->
+                <div id="signupExtraFields" class="hidden space-y-3.5 pt-1">
+                    <div>
+                        <label class="text-xs text-slate-300 font-semibold block mb-1">Display Name</label>
+                        <input type="text" id="authDisplayName" placeholder="e.g. Aryan" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-300 font-semibold block mb-1">Bio / Status</label>
+                        <input type="text" id="authBio" placeholder="Forever & Always ❤️" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
+                    </div>
+                    <div>
+                        <label class="text-xs text-slate-300 font-semibold block mb-1">Together Anniversary Date</label>
+                        <input type="date" id="authDate" class="w-full px-4 py-3 rounded-xl glass-input text-sm">
+                    </div>
                 </div>
             </div>
 
-            <button onclick="registerUserProfile()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-600 via-pink-600 to-rose-500 hover:from-rose-500 hover:to-pink-500 font-bold text-white text-sm shadow-xl shadow-rose-600/30 transition-all flex items-center justify-center gap-2">
-                <span>Create Profile & Generate UID</span>
+            <button onclick="submitAuthForm()" id="authSubmitBtn" class="w-full py-4 rounded-2xl bg-gradient-to-r from-rose-600 via-pink-600 to-rose-500 hover:from-rose-500 hover:to-pink-500 font-bold text-white text-sm shadow-xl shadow-rose-600/30 transition-all flex items-center justify-center gap-2">
+                <span>Sign In to Account</span>
                 <i data-lucide="sparkles" class="w-4 h-4"></i>
             </button>
         </div>
     </div>
 
     <!-- MAIN HEADER NAVIGATION -->
-    <header class="relative z-20 w-full px-4 py-3.5 md:px-8 border-b border-white/10 backdrop-blur-xl bg-slate-950/50">
+    <header class="relative z-20 w-full px-4 py-3.5 md:px-8 border-b border-white/10 backdrop-blur-xl bg-slate-950/60">
         <div class="max-w-7xl mx-auto flex items-center justify-between flex-wrap gap-4">
             <!-- Brand -->
             <div class="flex items-center space-x-3">
-                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center shadow-lg shadow-rose-600/30">
+                <div class="w-10 h-10 rounded-2xl bg-gradient-to-tr from-rose-600 to-pink-500 flex items-center justify-center shadow-lg shadow-rose-600/40">
                     <i data-lucide="heart" class="w-6 h-6 text-white fill-white"></i>
                 </div>
                 <div>
-                    <h1 class="font-serif text-xl font-bold tracking-wide text-white">HeartSync</h1>
+                    <h1 class="font-serif text-xl font-bold tracking-wide text-white">HeartSync Pro</h1>
                     <p class="text-[10px] text-rose-300 tracking-wider uppercase font-semibold">Real-Time Love & Friendship Hub</p>
                 </div>
             </div>
@@ -435,53 +497,62 @@
                     <i data-lucide="heart-handshake" class="w-4 h-4"></i>
                     <span class="hidden sm:inline">Hub</span>
                 </button>
-                <button onclick="switchTab('chat')" id="tabBtnChat" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-2">
+
+                <button onclick="switchTab('chat')" id="tabBtnChat" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-2 relative">
                     <i data-lucide="message-square-heart" class="w-4 h-4"></i>
                     <span class="hidden sm:inline">Chat</span>
+                    <!-- Chat Unread Badge -->
+                    <span id="chatBadge" class="hidden absolute -top-1 -right-1 px-1.5 py-0.5 rounded-full bg-rose-500 text-[9px] font-extrabold text-white animate-pulse">0</span>
                 </button>
+
                 <button onclick="switchTab('friends')" id="tabBtnFriends" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-2 relative">
                     <i data-lucide="user-plus" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Add Partner</span>
+                    <span class="hidden sm:inline">Pairing</span>
                     <span id="reqBadge" class="hidden absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-rose-500 animate-ping"></span>
                 </button>
+
                 <button onclick="switchTab('notes')" id="tabBtnNotes" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-2">
                     <i data-lucide="notebook-pen" class="w-4 h-4"></i>
-                    <span class="hidden sm:inline">Love Notes</span>
+                    <span class="hidden sm:inline">Notes</span>
                 </button>
+
                 <button onclick="switchTab('profile')" id="tabBtnProfile" class="px-4 py-2 rounded-xl text-xs font-semibold text-slate-400 hover:text-white transition-all flex items-center gap-2">
                     <i data-lucide="user" class="w-4 h-4"></i>
                     <span class="hidden sm:inline">Profile</span>
                 </button>
             </nav>
 
-            <!-- Status Badge -->
-            <div id="headerStatusBadge" class="flex items-center space-x-2 text-xs bg-rose-500/10 border border-rose-500/20 px-3 py-1.5 rounded-xl text-rose-300">
-                <span class="w-2 h-2 rounded-full bg-rose-500 animate-pulse"></span>
-                <span id="headerStatusText">Not Paired</span>
+            <!-- Partner Online Presence Badge -->
+            <div id="headerStatusBadge" class="flex items-center space-x-2.5 text-xs bg-slate-900 border border-white/10 px-3.5 py-1.5 rounded-xl">
+                <span id="partnerOnlineDot" class="w-2.5 h-2.5 rounded-full bg-slate-500"></span>
+                <div>
+                    <span id="headerStatusText" class="font-bold text-slate-200 block">Not Paired</span>
+                    <span id="partnerOnlineStatus" class="text-[10px] text-slate-400 block">Offline</span>
+                </div>
             </div>
         </div>
     </header>
 
-    <!-- DASHBOARD CONTAINER -->
+    <!-- MAIN CONTAINER -->
     <main class="relative z-10 flex-1 max-w-7xl w-full mx-auto px-4 py-8">
         
         <!-- TAB 1: MAIN HUB DASHBOARD -->
         <div id="tabDashboard" class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             
-            <!-- Left Side: Heart Generator & Moods (7 cols) -->
+            <!-- Left Side: Interactive Heart Generator & Signals (7 cols) -->
             <section class="lg:col-span-7 flex flex-col items-center justify-center text-center space-y-8">
                 
                 <div class="space-y-2 max-w-lg">
                     <div class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold bg-rose-500/10 border border-rose-500/20 text-rose-300">
                         <i data-lucide="sparkles" class="w-3.5 h-3.5 text-amber-300"></i>
-                        <span id="roomSyncTitle">Private Room Connected</span>
+                        <span id="roomSyncTitle">Private Room Active</span>
                     </div>
                     <h2 class="font-serif text-3xl md:text-5xl font-bold tracking-tight text-white leading-tight">
                         Missing your partner? <br>
-                        <span class="font-cursive text-4xl md:text-6xl text-transparent bg-clip-text bg-gradient-to-r from-rose-300 via-pink-400 to-rose-500">Tap to send a heartbeat</span>
+                        <span class="font-cursive text-4xl md:text-6xl text-transparent bg-clip-text bg-gradient-to-r from-rose-300 via-pink-400 to-rose-500">Tap to send live love</span>
                     </h2>
                     <p class="text-xs md:text-sm text-slate-300/80 font-light">
-                        Single tap sends instant web signal & notification • Press & hold for realistic heartbeat thuds.
+                        Single tap sends instant web signal • Press & hold for realistic heartbeat thuds.
                     </p>
                 </div>
 
@@ -507,32 +578,32 @@
                     </button>
                 </div>
 
-                <!-- Quick Signals -->
+                <!-- Interactive Quick Signals (Virtual Hugs & Kisses) -->
                 <div class="w-full max-w-md space-y-3">
                     <div class="text-[11px] uppercase tracking-widest text-slate-400 font-semibold text-center">
-                        Quick Signals
+                        Interactive Live Signals
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-2.5">
-                        <button onclick="sendQuickSignal('Virtual Hug 🫂', 'Sent a warm virtual hug!')" class="glass-panel py-3 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1">
-                            <span class="text-lg">🫂</span>
+                        <button onclick="sendQuickSignal('hug', 'Virtual Hug 🫂', 'Sent a warm virtual hug!', '🫂')" class="glass-panel py-3.5 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1 active:scale-95">
+                            <span class="text-2xl">🫂</span>
                             <span>Virtual Hug</span>
                         </button>
-                        <button onclick="sendQuickSignal('Virtual Kiss 💋', 'Sent a sweet virtual kiss!')" class="glass-panel py-3 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1">
-                            <span class="text-lg">💋</span>
+                        <button onclick="sendQuickSignal('kiss', 'Virtual Kiss 💋', 'Sent a sweet flying kiss!', '💋')" class="glass-panel py-3.5 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1 active:scale-95">
+                            <span class="text-2xl">💋</span>
                             <span>Virtual Kiss</span>
                         </button>
-                        <button onclick="sendQuickSignal('Coffee Date ☕', 'Invited for coffee!')" class="glass-panel py-3 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1">
-                            <span class="text-lg">☕</span>
-                            <span>Coffee Date</span>
+                        <button onclick="sendQuickSignal('sparkles', 'Love Sparkles ✨', 'Sent romantic sparkles!', '✨')" class="glass-panel py-3.5 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1 active:scale-95">
+                            <span class="text-2xl">✨</span>
+                            <span>Love Sparkles</span>
                         </button>
-                        <button onclick="sendQuickSignal('Call Me 📞', 'Requested a quick call!')" class="glass-panel py-3 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1">
-                            <span class="text-lg">📞</span>
-                            <span>Call Me</span>
+                        <button onclick="sendQuickSignal('coffee', 'Coffee Date ☕', 'Invited for a romantic coffee date!', '☕')" class="glass-panel py-3.5 px-3 rounded-2xl text-xs font-semibold text-slate-200 hover:border-rose-500/50 hover:bg-rose-500/10 transition-all flex flex-col items-center gap-1 active:scale-95">
+                            <span class="text-2xl">☕</span>
+                            <span>Coffee Date</span>
                         </button>
                     </div>
                 </div>
 
-                <!-- Mood Sync -->
+                <!-- Live Mood Selector -->
                 <div class="w-full max-w-xl space-y-3">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div class="glass-panel p-5 rounded-3xl space-y-3 border border-rose-500/20">
@@ -542,7 +613,7 @@
                             </div>
                             <div class="flex items-center justify-between">
                                 <span id="yourMoodText" class="text-base font-bold text-white">Happy 🥰</span>
-                                <select onchange="updateYourMood(this.value)" class="glass-input text-xs rounded-xl px-2 py-1 focus:outline-none">
+                                <select onchange="updateYourMood(this.value)" class="glass-input text-xs rounded-xl px-2.5 py-1.5 focus:outline-none">
                                     <option value="Happy 🥰" class="bg-slate-900">Happy 🥰</option>
                                     <option value="Missing You 🥺" class="bg-slate-900">Missing You 🥺</option>
                                     <option value="Busy 💼" class="bg-slate-900">Busy 💼</option>
@@ -567,7 +638,7 @@
 
             </section>
 
-            <!-- Right Side: Touch Lamp & Memory Counter (5 cols) -->
+            <!-- Right Side: Distance Touch Lamp & Together Counter (5 cols) -->
             <section class="lg:col-span-5 w-full space-y-6">
                 
                 <!-- Touch Lamp Widget -->
@@ -577,7 +648,7 @@
                         <h3 class="font-serif font-bold text-base text-white">Distance Touch Lamp</h3>
                     </div>
                     <p class="text-xs text-slate-300 font-light">
-                        Tap the bulb below to glow the lamp on your partner's screen instantly!
+                        Tap the bulb below to glow the lamp on your partner's screen in real-time!
                     </p>
                     <div class="flex flex-col items-center justify-center py-2">
                         <button id="touchLampBtn" onclick="toggleTouchLamp()" class="lamp-off w-24 h-24 md:w-28 md:h-28 rounded-full border-2 flex flex-col items-center justify-center cursor-pointer transition-all duration-500">
@@ -587,7 +658,7 @@
                     </div>
                 </div>
 
-                <!-- Relationship Counter -->
+                <!-- Together Anniversary Counter -->
                 <div class="glass-panel p-6 rounded-3xl space-y-4 border border-white/10">
                     <div class="flex items-center justify-between border-b border-white/10 pb-3">
                         <div class="flex items-center space-x-2">
@@ -620,22 +691,16 @@
 
         <!-- TAB 2: WHATSAPP-STYLE RICH CHAT ENGINE -->
         <div id="tabChat" class="hidden max-w-4xl mx-auto">
-            <div class="glass-panel rounded-3xl overflow-hidden border border-white/10 flex flex-col h-[70vh]">
+            <div class="glass-panel rounded-3xl overflow-hidden border border-white/10 flex flex-col h-[72vh]">
                 
                 <!-- Chat Header -->
                 <div class="px-6 py-4 bg-white/5 border-b border-white/10 flex items-center justify-between">
                     <div class="flex items-center space-x-3">
-                        <div class="relative">
-                            <img id="chatPartnerDp" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100" class="w-10 h-10 rounded-full object-cover border-2 border-rose-500">
-                            <span class="absolute bottom-0 right-0 w-3 h-3 bg-emerald-500 rounded-full border-2 border-slate-900"></span>
-                        </div>
+                        <img id="chatPartnerDp" src="https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100" class="w-10 h-10 rounded-full object-cover border-2 border-rose-500">
                         <div>
                             <h3 id="chatPartnerName" class="font-bold text-sm text-white">Partner Name</h3>
-                            <p class="text-[10px] text-emerald-400 font-semibold">Online in Shared Room</p>
+                            <p class="text-[10px] text-emerald-400 font-semibold">End-to-End Room Encrypted</p>
                         </div>
-                    </div>
-                    <div class="flex items-center space-x-2 text-slate-400">
-                        <i data-lucide="shield-check" class="w-5 h-5 text-rose-400" title="End-to-End Room Encrypted"></i>
                     </div>
                 </div>
 
@@ -643,13 +708,13 @@
                 <div id="chatMessagesFeed" class="flex-1 p-6 overflow-y-auto space-y-4">
                     <div class="text-center py-6 text-xs text-slate-400">
                         <i data-lucide="lock" class="w-4 h-4 mx-auto mb-1 text-rose-400"></i>
-                        Messages & attachments are private inside your room.
+                        Messages are private inside your shared room.
                     </div>
                 </div>
 
                 <!-- Chat Input Controls -->
                 <div class="p-4 bg-white/5 border-t border-white/10 flex items-center space-x-2">
-                    <!-- File / Attachment button -->
+                    <!-- Attachment button -->
                     <label class="p-2.5 rounded-xl glass-panel text-slate-300 hover:text-rose-400 cursor-pointer transition-colors">
                         <i data-lucide="paperclip" class="w-5 h-5"></i>
                         <input type="file" id="chatFileInput" class="hidden" onchange="handleFileUpload(event)">
@@ -673,15 +738,13 @@
 
         <!-- TAB 3: FRIENDS & PAIRING REQUESTS -->
         <div id="tabFriends" class="hidden max-w-2xl mx-auto space-y-6">
-            
-            <!-- Send Friend Request Section -->
             <div class="glass-panel p-6 rounded-3xl space-y-4 border border-rose-500/30">
                 <div class="flex items-center space-x-3 text-rose-300">
                     <i data-lucide="user-plus" class="w-6 h-6"></i>
                     <h3 class="font-serif font-bold text-xl text-white">Add Partner by UID</h3>
                 </div>
                 <p class="text-xs text-slate-300">
-                    Enter your partner's unique HeartSync UID to send a pairing request. Once accepted, you both will unlock your private room!
+                    Enter your partner's unique HeartSync UID to send a pairing request. Once accepted, you unlock your room!
                 </p>
 
                 <div class="flex space-x-2">
@@ -697,7 +760,7 @@
             <div class="glass-panel p-6 rounded-3xl space-y-4 border border-white/10">
                 <h4 class="font-bold text-sm text-white flex items-center gap-2">
                     <i data-lucide="bell" class="w-4 h-4 text-amber-300"></i>
-                    <span>Pending Requests Received</span>
+                    <span>Pending Incoming Requests</span>
                 </h4>
 
                 <div id="requestsFeed" class="space-y-3">
@@ -730,7 +793,7 @@
             </div>
         </div>
 
-        <!-- TAB 5: USER PROFILE & UNPAIR SETTINGS -->
+        <!-- TAB 5: USER PROFILE MANAGEMENT & SETTINGS -->
         <div id="tabProfile" class="hidden max-w-xl mx-auto space-y-6">
             <div class="glass-panel p-6 rounded-3xl space-y-6 border border-white/10 text-center">
                 
@@ -743,7 +806,7 @@
                     <p id="profileBioDisplay" class="text-xs text-rose-300 mt-1">Bio / Status</p>
                 </div>
 
-                <!-- UID Box -->
+                <!-- Unique UID Box -->
                 <div class="glass-panel p-4 rounded-2xl flex items-center justify-between border border-rose-500/20">
                     <div class="text-left">
                         <span class="text-[10px] text-slate-400 uppercase font-bold tracking-wider">Your Unique UID</span>
@@ -755,8 +818,32 @@
                     </button>
                 </div>
 
+                <!-- EDIT PROFILE FORM -->
+                <div class="glass-panel p-5 rounded-2xl space-y-4 text-left border border-white/10">
+                    <h4 class="font-bold text-xs uppercase tracking-wider text-rose-300">Edit Profile & Account</h4>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Display Name</label>
+                        <input type="text" id="editDisplayName" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs">
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Bio / Status</label>
+                        <input type="text" id="editBio" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs">
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Avatar DP URL</label>
+                        <input type="text" id="editDpUrl" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs">
+                    </div>
+                    <div>
+                        <label class="text-[11px] text-slate-400 block mb-1">Together Anniversary Date</label>
+                        <input type="date" id="editRelDate" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-xs">
+                    </div>
+                    <button onclick="saveProfileChanges()" class="w-full py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-all">
+                        Save Profile Updates
+                    </button>
+                </div>
+
                 <!-- Unpair Room Button -->
-                <div id="unpairSection" class="pt-4 border-t border-white/10 hidden">
+                <div id="unpairSection" class="pt-2 border-t border-white/10 hidden">
                     <button onclick="unpairCurrentRoom()" class="w-full py-3 rounded-xl bg-red-500/20 hover:bg-red-500/30 text-red-300 border border-red-500/30 text-xs font-bold transition-all flex items-center justify-center gap-2">
                         <i data-lucide="user-x" class="w-4 h-4"></i>
                         <span>Unpair / Leave Shared Room</span>
@@ -775,7 +862,7 @@
     <!-- FOOTER -->
     <footer class="relative z-20 w-full py-6 border-t border-white/10 text-center text-xs text-slate-400">
         <div class="max-w-7xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-4">
-            <p>HeartSync &copy; Real-Time Couple & Friendship Connection Hub</p>
+            <p>HeartSync Pro &copy; Real-Time Couple & Friendship Connection Hub</p>
             <p class="text-rose-300/80 font-cursive text-base">Endless Love & Connection ❤️</p>
         </div>
     </footer>
@@ -784,7 +871,7 @@
     <script>
         lucide.createIcons();
 
-        // 1. Particle Canvas System for Floating 3D Hearts
+        // 1. Particle Canvas Engine
         const canvas = document.getElementById('heartCanvas');
         const ctx = canvas.getContext('2d');
         let particles = [];
@@ -801,8 +888,8 @@
                 this.x = x || Math.random() * canvas.width;
                 this.y = y || canvas.height + 20;
                 this.size = Math.random() * 14 + 10;
-                this.speedY = isBurst ? (Math.random() - 0.7) * 9 : Math.random() * 1.5 + 0.5;
-                this.speedX = isBurst ? (Math.random() - 0.5) * 9 : Math.random() * 0.8 - 0.4;
+                this.speedY = isBurst ? (Math.random() - 0.7) * 10 : Math.random() * 1.5 + 0.5;
+                this.speedX = isBurst ? (Math.random() - 0.5) * 10 : Math.random() * 0.8 - 0.4;
                 this.opacity = isBurst ? 1 : Math.random() * 0.6 + 0.2;
                 this.rotation = Math.random() * Math.PI * 2;
                 this.rotSpeed = (Math.random() - 0.5) * 0.05;
@@ -844,7 +931,7 @@
 
         for (let i = 0; i < 20; i++) particles.push(new HeartParticle());
 
-        function createParticleBurst(x, y, count = 25) {
+        function createParticleBurst(x, y, count = 30) {
             for (let i = 0; i < count; i++) particles.push(new HeartParticle(x, y, true));
         }
 
@@ -859,36 +946,99 @@
         }
         animateParticles();
 
-        // 2. User Authentication & Profile Registration
-        function registerUserProfile() {
-            const name = document.getElementById('authName').value.trim() || 'User';
-            const bio = document.getElementById('authBio').value.trim() || 'Forever & Always ❤️';
-            const dp = document.getElementById('authDp').value.trim() || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100';
-            const relDate = document.getElementById('authDate').value || '2023-01-01';
+        // 2. Authentication Form & Mode Switcher
+        let currentAuthMode = 'login';
+        function toggleAuthMode(mode) {
+            currentAuthMode = mode;
+            const extra = document.getElementById('signupExtraFields');
+            const tabL = document.getElementById('tabLogin');
+            const tabS = document.getElementById('tabSignup');
+            const submitBtn = document.getElementById('authSubmitBtn');
 
-            const randomUid = 'HS-' + Math.floor(1000 + Math.random() * 9000);
-            const uid = 'usr_' + Math.random().toString(36).substring(2, 9);
+            if (mode === 'signup') {
+                extra.classList.remove('hidden');
+                tabS.className = 'flex-1 py-2 text-center text-rose-400 border-b-2 border-rose-500 font-bold';
+                tabL.className = 'flex-1 py-2 text-center text-slate-400 hover:text-white';
+                submitBtn.querySelector('span').innerText = 'Create Account & Generate UID';
+            } else {
+                extra.classList.add('hidden');
+                tabL.className = 'flex-1 py-2 text-center text-rose-400 border-b-2 border-rose-500 font-bold';
+                tabS.className = 'flex-1 py-2 text-center text-slate-400 hover:text-white';
+                submitBtn.querySelector('span').innerText = 'Sign In to Account';
+            }
+        }
 
-            const userData = {
-                uid: uid,
-                customUid: randomUid,
-                name: name,
-                bio: bio,
-                dp: dp,
-                relDate: relDate,
-                pairedRoomId: null,
-                partnerUid: null
-            };
+        function submitAuthForm() {
+            const username = document.getElementById('authUsername').value.trim().toLowerCase();
+            const password = document.getElementById('authPassword').value.trim();
 
-            window.HSApp.user = userData;
-            localStorage.setItem('hs_user', JSON.stringify(userData));
+            if (!username || !password) {
+                showToast("Required Fields", "Please enter both username and password!");
+                return;
+            }
 
-            import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, set }) => {
-                set(ref(window.HSApp.db, `users/${uid}`), userData);
-                set(ref(window.HSApp.db, `uidMap/${randomUid}`), uid);
+            const db = window.HSApp.db;
+
+            import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, get, set }) => {
+                if (currentAuthMode === 'login') {
+                    // LOGIN WORKFLOW
+                    get(ref(db, `userAccounts/${username}`)).then((snap) => {
+                        if (!snap.exists()) {
+                            showToast("Login Failed", "Username not found. Please create an account!");
+                            return;
+                        }
+                        const accData = snap.val();
+                        if (accData.password !== password) {
+                            showToast("Login Failed", "Incorrect password!");
+                            return;
+                        }
+
+                        // Fetch full user object
+                        get(ref(db, `users/${accData.uid}`)).then(uSnap => {
+                            if (uSnap.exists()) {
+                                window.HSApp.user = uSnap.val();
+                                localStorage.setItem('hs_user_account', JSON.stringify(window.HSApp.user));
+                                onUserLoggedIn();
+                            }
+                        });
+                    });
+                } else {
+                    // SIGNUP WORKFLOW
+                    get(ref(db, `userAccounts/${username}`)).then((snap) => {
+                        if (snap.exists()) {
+                            showToast("Username Taken", "Please choose a different username!");
+                            return;
+                        }
+
+                        const name = document.getElementById('authDisplayName').value.trim() || username;
+                        const bio = document.getElementById('authBio').value.trim() || 'Forever & Always ❤️';
+                        const relDate = document.getElementById('authDate').value || '2023-01-01';
+
+                        const customUid = 'HS-' + Math.floor(1000 + Math.random() * 9000);
+                        const uid = 'usr_' + Math.random().toString(36).substring(2, 9);
+
+                        const userData = {
+                            uid: uid,
+                            username: username,
+                            customUid: customUid,
+                            name: name,
+                            bio: bio,
+                            dp: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
+                            relDate: relDate,
+                            pairedRoomId: null,
+                            partnerUid: null
+                        };
+
+                        set(ref(db, `users/${uid}`), userData);
+                        set(ref(db, `userAccounts/${username}`), { uid: uid, password: password });
+                        set(ref(db, `uidMap/${customUid}`), uid);
+
+                        window.HSApp.user = userData;
+                        localStorage.setItem('hs_user_account', JSON.stringify(userData));
+                        onUserLoggedIn();
+                    });
+                }
             });
-
-            onUserLoggedIn();
         }
 
         function onUserLoggedIn() {
@@ -896,7 +1046,7 @@
             updateProfileUI();
             startAnniversaryCounter();
             if (window.initRealtimeListeners) window.initRealtimeListeners();
-            showToast("Welcome to HeartSync ❤️", `Logged in as ${window.HSApp.user.name}`);
+            showToast("Welcome to HeartSync Pro ❤️", `Logged in as ${window.HSApp.user.name}`);
         }
 
         function showAuthScreen() {
@@ -910,6 +1060,29 @@
             document.getElementById('profileBioDisplay').innerText = u.bio;
             document.getElementById('profileDpDisplay').src = u.dp;
             document.getElementById('profileUidDisplay').innerText = u.customUid || u.uid;
+
+            // Fill Edit Profile inputs
+            document.getElementById('editDisplayName').value = u.name || '';
+            document.getElementById('editBio').value = u.bio || '';
+            document.getElementById('editDpUrl').value = u.dp || '';
+            document.getElementById('editRelDate').value = u.relDate || '';
+        }
+
+        function saveProfileChanges() {
+            const name = document.getElementById('editDisplayName').value.trim();
+            const bio = document.getElementById('editBio').value.trim();
+            const dp = document.getElementById('editDpUrl').value.trim();
+            const relDate = document.getElementById('editRelDate').value;
+
+            if (!name) return;
+
+            const myUid = window.HSApp.user.uid;
+            import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, update }) => {
+                update(ref(window.HSApp.db, `users/${myUid}`), {
+                    name, bio, dp, relDate
+                });
+                showToast("Profile Updated! 👤", "Your changes have been saved.");
+            });
         }
 
         function copyMyUid() {
@@ -1032,7 +1205,7 @@
 
         function renderPairedState() {
             const p = window.HSApp.partner;
-            document.getElementById('headerStatusText').innerText = `Paired with ${p?.name || 'Partner'}`;
+            document.getElementById('headerStatusText').innerText = p?.name || 'Partner';
             document.getElementById('roomSyncTitle').innerText = `Room Active with ${p?.name}`;
             document.getElementById('chatPartnerName').innerText = p?.name || 'Partner';
             document.getElementById('chatPartnerDp').src = p?.dp || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100';
@@ -1085,7 +1258,7 @@
             });
         }
 
-        // 5. WhatsApp-Style Chat Messaging Engine
+        // 5. WhatsApp-Style Chat Engine
         function sendChatMessage() {
             const input = document.getElementById('chatInput');
             const text = input.value.trim();
@@ -1199,7 +1372,18 @@
             }
         }
 
-        // 6. Heart Signals & Touch Lamp
+        function updateChatBadgeUI() {
+            const badge = document.getElementById('chatBadge');
+            if (!badge) return;
+            if (window.HSApp.unreadChatCount > 0) {
+                badge.innerText = window.HSApp.unreadChatCount;
+                badge.classList.remove('hidden');
+            } else {
+                badge.classList.add('hidden');
+            }
+        }
+
+        // 6. Interactive Heart Signals & Touch Lamp
         let heartbeatInterval = null;
 
         function handleHeartClick(event) {
@@ -1211,9 +1395,9 @@
             if ('vibrate' in navigator) navigator.vibrate(80);
 
             const rect = btn.getBoundingClientRect();
-            createParticleBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, 20);
+            createParticleBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, 25);
 
-            sendSignalToFirebase('Thinking of You ❤️', 'Sent a heartbeat wave!');
+            sendSignalToFirebase('heart', 'Heart Pulse ❤️', 'Sent a live heartbeat pulse!', '❤️');
         }
 
         function startHeartbeatHold() {
@@ -1223,8 +1407,8 @@
                 if ('vibrate' in navigator) navigator.vibrate([60, 40, 60]);
                 const btn = document.getElementById('mainHeartBtn');
                 const rect = btn.getBoundingClientRect();
-                createParticleBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, 4);
-            }, 600);
+                createParticleBurst(rect.left + rect.width / 2, rect.top + rect.height / 2, 5);
+            }, 550);
         }
 
         function stopHeartbeatHold() {
@@ -1234,23 +1418,37 @@
             }
         }
 
-        function sendQuickSignal(mood, action) {
-            if (window.playAudio) window.playAudio('ping');
+        function sendQuickSignal(type, title, action, icon) {
+            if (window.playAudio) window.playAudio(type);
             showToast("Signal Sent! ✨", action);
-            sendSignalToFirebase(mood, action);
+            sendSignalToFirebase(type, title, action, icon);
         }
 
-        function sendSignalToFirebase(mood, action) {
+        function sendSignalToFirebase(type, title, action, icon) {
             if (!window.HSApp.db || !window.HSApp.roomId) return;
             import("https://www.gstatic.com/firebasejs/11.6.1/firebase-database.js").then(({ ref, push }) => {
                 push(ref(window.HSApp.db, `rooms/${window.HSApp.roomId}/pings`), {
                     senderId: window.HSApp.user.uid,
                     senderName: window.HSApp.user.name,
-                    mood: mood,
+                    type: type,
+                    title: title,
                     action: action,
+                    icon: icon,
                     timestamp: Date.now()
                 });
             });
+        }
+
+        function showSignalBanner(icon, title, action) {
+            const banner = document.getElementById('signalBanner');
+            document.getElementById('bannerIcon').innerText = icon;
+            document.getElementById('bannerTitle').innerText = title;
+            document.getElementById('bannerSub').innerText = `${window.HSApp.partner?.name || 'Partner'}: ${action}`;
+
+            banner.classList.add('signal-banner-active');
+            setTimeout(() => {
+                banner.classList.remove('signal-banner-active');
+            }, 3000);
         }
 
         function updateYourMood(val) {
@@ -1290,7 +1488,7 @@
             }
         }
 
-        // 7. Relationship Counter
+        // 7. Together Anniversary Counter
         function startAnniversaryCounter() {
             const dateStr = window.HSApp.user?.relDate || '2023-01-01';
             const startDate = new Date(dateStr).getTime();
@@ -1314,6 +1512,12 @@
         // Navigation Tabs Switcher
         function switchTab(tab) {
             window.HSApp.activeTab = tab;
+
+            if (tab === 'chat') {
+                window.HSApp.unreadChatCount = 0;
+                updateChatBadgeUI();
+            }
+
             ['Dashboard', 'Chat', 'Friends', 'Notes', 'Profile'].forEach(t => {
                 const el = document.getElementById('tab' + t);
                 const btn = document.getElementById('tabBtn' + t);
@@ -1356,7 +1560,7 @@
         }
 
         function logoutUser() {
-            localStorage.removeItem('hs_user');
+            localStorage.removeItem('hs_user_account');
             window.location.reload();
         }
 
@@ -1365,7 +1569,9 @@
         }
 
         // Global Bindings
-        window.registerUserProfile = registerUserProfile;
+        window.toggleAuthMode = toggleAuthMode;
+        window.submitAuthForm = submitAuthForm;
+        window.saveProfileChanges = saveProfileChanges;
         window.copyMyUid = copyMyUid;
         window.sendFriendRequest = sendFriendRequest;
         window.acceptFriendRequest = acceptFriendRequest;
